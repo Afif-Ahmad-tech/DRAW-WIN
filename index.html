@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Draw Win</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <main id="app" class="shell">
+    <header class="topbar"><a class="brand" href="/">draw<span>win</span></a><span class="local-tag">LOCAL PLAY</span></header>
+    <section id="home" class="home">
+      <div class="intro">
+        <div class="eyebrow">A little drawing goes a long way</div>
+        <h1>Draw it.<br><span>Guess it.</span></h1>
+        <p>Make a private room and get your people together for a quick drawing game.</p>
+        <label class="field-label" for="name">YOUR NAME</label>
+        <input id="name" maxlength="18" placeholder="What should we call you?" autocomplete="nickname">
+        <div class="home-actions"><button id="create" class="primary">Create a room <span>↗</span></button><div class="or">OR JOIN ONE</div>
+          <div class="join-row"><input id="room-code" maxlength="5" placeholder="ROOM CODE" aria-label="Room code"><button id="join" class="secondary">Join room</button></div>
+        </div>
+        <p id="error" class="error" role="alert"></p>
+      </div>
+      <aside class="preview" aria-hidden="true"><div class="sun"></div><div class="scribble">✳</div><div class="preview-word">PIZZA?</div><div class="preview-note">close enough!</div><div class="preview-caption">GOOD GUESSES<br>START WITH BAD ART</div></aside>
+    </section>
+    <section id="room" class="room hidden">
+      <div class="room-head"><div><div class="eyebrow" id="room-label">PRIVATE ROOM</div><h1 id="room-title">Room <span>—</span></h1></div><button id="leave" class="text-button">Leave room</button></div>
+      <div class="lobby-card" id="lobby">
+        <div class="lobby-main"><div class="room-code-label">SHARE THIS CODE</div><div id="code-display" class="code">-----</div><p>Open this page in another tab and join with the code.</p><div id="players" class="players"></div></div>
+        <div class="lobby-side"><div class="rule-icon">✎</div><h2>Ready when you are.</h2><p>At least 2 players needed. Up to 10 can join.</p><button id="start" class="primary" disabled>Start game <span>↗</span></button><div id="lobby-status" class="status">Waiting for players…</div></div>
+      </div>
+      <div id="game" class="game hidden">
+        <div class="game-main"><div class="game-bar"><div><div class="eyebrow" id="turn-label">ROUND 1</div><div id="game-prompt" class="prompt">Your turn to draw!</div></div><div id="word" class="word"></div></div>
+          <div class="board-wrap"><canvas id="board" aria-label="Shared drawing board"></canvas><div id="board-hint" class="board-hint">Draw a clue for everyone</div></div>
+          <div class="tools"><button id="clear" class="tool-button" aria-label="Clear drawing">↺ <span>Clear</span></button><span id="tool-hint">Use your mouse or finger to draw</span></div>
+        </div>
+        <aside class="game-side"><div class="side-title">PLAYERS <span id="game-count">0/10</span></div><div id="scoreboard" class="scoreboard"></div><div class="chat"><div class="side-title">GUESSES <span>✦</span></div><div id="messages" class="messages" aria-live="polite"></div><form id="guess-form" class="guess-form"><input id="guess" maxlength="80" placeholder="Type your guess…" aria-label="Your guess"><button aria-label="Send guess">↗</button></form></div><button id="next" class="primary hidden">Next turn <span>↗</span></button></aside>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
