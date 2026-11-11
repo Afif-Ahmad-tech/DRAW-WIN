@@ -2,24 +2,46 @@ const $ = (id) => document.getElementById(id);
 const me = sessionStorage.playerId || (sessionStorage.playerId = crypto.randomUUID());
 let room, channel, drawing = false, lastPoint, state;
 let selectedColour = '#283026';
+let retryTimer, retries = 0;
 const colours = [['Black', '#283026'], ['Red', '#e53935'], ['Orange', '#f28c28'], ['Yellow', '#f5c518'], ['Green', '#43a047'], ['Blue', '#1e88e5'], ['Purple', '#8e44ad']];
 
 function showError(message) { $('error').textContent = message; }
 function getName() { return $('name').value.trim() || 'Player'; }
-function send(message) { if (channel?.readyState === WebSocket.OPEN) channel.send(JSON.stringify(message)); }
-function connect(type) {
-  if (channel) channel.close();
-  const code = $('room-code').value.trim().toUpperCase();
+function connectionStatus(text) { $('connection-status').textContent = text; }
+function send(message) {
+  if (channel?.readyState !== WebSocket.OPEN) { connectionStatus('Reconnecting…'); return false; }
+  channel.send(JSON.stringify(message)); return true;
+}
+function connect(type, retry = false) {
+  clearTimeout(retryTimer);
+  const previous = channel; channel = null; if (previous) previous.close();
+  if (!retry) retries = 0;
+  const code = retry ? room || sessionStorage.activeRoom || $('room-code').value.trim().toUpperCase() : $('room-code').value.trim().toUpperCase();
   if (type === 'join' && !/^[A-Z0-9]{5}$/.test(code)) return showError('Enter a five-character room code.');
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const endpoint = location.hostname.endsWith('.vercel.app') ? 'wss://draw-win.onrender.com' : `${protocol}//${location.host}`;
   const socket = channel = new WebSocket(endpoint);
-  socket.onopen = () => send({ type, id: me, name: getName(), code });
+  connectionStatus(retry ? 'Reconnecting…' : 'Connecting…');
+  $('create').disabled = $('join').disabled = true;
+  let rejected = false;
+  const timeout = setTimeout(() => { if (channel === socket) socket.close(); }, 40000);
+  socket.onopen = () => {
+    if (channel !== socket) return;
+    socket.send(JSON.stringify({ type, id: me, name: getName(), code }));
+  };
   socket.onmessage = ({ data }) => {
+    if (channel !== socket) return;
     const message = JSON.parse(data);
-    if (message.type === 'error') { showError(message.text); socket.close(); return; }
+    if (message.type === 'error') {
+      rejected = true; clearTimeout(timeout); sessionStorage.removeItem('activeRoom');
+      state = null; room = null; drawing = false;
+      $('room').classList.add('hidden'); $('home').classList.remove('hidden');
+      showError(message.text); socket.close(); return;
+    }
     if (message.type === 'joined') {
       state = message.state; room = state.code;
+      clearTimeout(timeout); retries = 0; connectionStatus('Connected');
+      $('create').disabled = $('join').disabled = false;
       sessionStorage.activeRoom = room;
       sessionStorage.playerName = state.players.find((p) => p.id === me).name;
       $('home').classList.add('hidden'); $('room').classList.remove('hidden');
@@ -35,16 +57,25 @@ function connect(type) {
     } else if (message.type === 'message') addMessage(message.name, message.text, message.correct);
   };
   socket.onclose = () => {
+    clearTimeout(timeout);
     if (channel !== socket) return;
     channel = null;
-    if (state) { state = null; room = null; $('room').classList.add('hidden'); $('home').classList.remove('hidden'); showError('Connection lost. Join again with the room code.'); }
+    drawing = false;
+    $('create').disabled = $('join').disabled = false;
+    if (rejected) { connectionStatus(''); return; }
+    if (retries++ < 8) {
+      connectionStatus('Reconnecting…');
+      retryTimer = setTimeout(() => connect(room ? 'join' : type, true), Math.min(1000 * 2 ** retries, 10000));
+    } else { connectionStatus('Disconnected'); showError('Could not reconnect. Please try joining again.'); }
   };
-  socket.onerror = () => showError('Could not connect to the game server. Please try again.');
+  socket.onerror = () => connectionStatus('Reconnecting…');
 }
 function leaveRoom() {
+  clearTimeout(retryTimer);
   sessionStorage.removeItem('activeRoom');
   send({ type: 'leave' });
   const socket = channel; channel = null; if (socket) socket.close();
+  connectionStatus(''); $('create').disabled = $('join').disabled = false;
   $('room').classList.add('hidden'); $('home').classList.remove('hidden'); state=null; room=null;
   history.replaceState(null, '', location.pathname);
 }
@@ -93,9 +124,13 @@ function render() {
   $('next').classList.toggle('hidden', me !== state.host);
   redraw();
 }
+setInterval(() => {
+  $('turn-timer').textContent = state?.status === 'playing' && state.endsAt ? Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)) + 's' : '';
+}, 250);
 function escapeHtml(value) { return value.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function point(event) { const r=$('board').getBoundingClientRect(); return { x:(event.clientX-r.left)/r.width, y:(event.clientY-r.top)/r.height }; }
 function drawStroke(stroke, send=true) {
+  if (send && channel?.readyState !== WebSocket.OPEN) return;
   const ctx=$('board').getContext('2d'), w=$('board').clientWidth, h=$('board').clientHeight;
   ctx.strokeStyle=stroke.colour || '#283026'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.beginPath(); ctx.moveTo(stroke.a.x*w,stroke.a.y*h); ctx.lineTo(stroke.b.x*w,stroke.b.y*h); ctx.stroke();
   if (send) { state.strokes.push(stroke); channel.send(JSON.stringify({type:'stroke',stroke})); }
@@ -120,14 +155,13 @@ for (const [name, colour] of colours) {
 $('next').onclick = () => send({ type: 'next' });
 $('leave').onclick = leaveRoom;
 $('room-code').oninput = (e) => { e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); };
-$('board').onpointerdown = (e) => { if (!state || state.status!=='playing' || state.drawer!==me || state.choosing || state.guessed) return; drawing=true; lastPoint=point(e); $('board').setPointerCapture(e.pointerId); };
+$('board').onpointerdown = (e) => { if (!state || channel?.readyState !== WebSocket.OPEN || state.status!=='playing' || state.drawer!==me || state.choosing || state.guessed) return; drawing=true; lastPoint=point(e); $('board').setPointerCapture(e.pointerId); };
 $('board').onpointermove = (e) => { if (!drawing) return; const next=point(e); drawStroke({a:lastPoint,b:next,colour:selectedColour}); lastPoint=next; };
 $('board').onpointerup = () => { drawing=false; };
 $('clear').onclick = () => send({ type: 'clear' });
 $('guess-form').onsubmit = (e) => {
   e.preventDefault(); const text=$('guess').value.trim(); if(!text || !state || state.status!=='playing' || state.drawer===me || state.guessed) return;
-  send({ type: 'guess', text });
-  $('guess').value='';
+  if (send({ type: 'guess', text })) $('guess').value='';
 };
 $('room-code').value = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 $('name').value = sessionStorage.playerName || '';

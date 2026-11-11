@@ -2,12 +2,12 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { randomInt } from 'node:crypto';
 
 const words = ['pancake', 'octopus', 'spaceship', 'watermelon', 'guitar', 'volcano', 'butterfly', 'castle'];
-// shortcut: rooms disappear on restart; use shared storage when persistence is needed.
-const rooms = new Map();
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const colours = ['#283026', '#e53935', '#f28c28', '#f5c518', '#43a047', '#1e88e5', '#8e44ad'];
 
 export function attachMultiplayer(server) {
+  // shortcut: rooms disappear on restart; use shared storage when persistence is needed.
+  const rooms = new Map();
   const wss = new WebSocketServer({ server, maxPayload: 32768 });
   const send = (socket, message) => {
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
@@ -18,26 +18,47 @@ export function attachMultiplayer(server) {
   const view = (room, id) => ({
     ...room.state,
     word: id === room.state.drawer || room.state.guessed ? room.state.word : '',
-    mask: (room.state.word || '').replace(/[a-z]/gi, '_'),
+    mask: [...(room.state.word || '')].map((letter, index) => room.revealed.has(index) ? letter : /[a-z]/i.test(letter) ? '_' : letter).join(''),
     choices: id === room.state.drawer ? room.state.choices : []
   });
   const sync = (room) => {
     for (const [id, socket] of room.clients) send(socket, { type: 'state', state: view(room, id) });
   };
+  function tick(room) {
+    if (room.state.status !== 'playing') return;
+    const remaining = room.state.endsAt - Date.now();
+    if (remaining <= 0) return nextTurn(room);
+    if (room.state.word && !room.state.guessed) {
+      const count = remaining <= 5000 ? 3 : remaining <= 15000 ? 2 : remaining <= 30000 ? 1 : 0;
+      let changed = false;
+      while (room.revealed.size < Math.min(count, room.state.word.length)) {
+        const available = [...room.state.word].map((_, i) => i).filter((i) => !room.revealed.has(i));
+        room.revealed.add(available[randomInt(available.length)]); changed = true;
+      }
+      if (changed) sync(room);
+    }
+    room.clock = setTimeout(() => tick(room), Math.min(1000, remaining));
+    room.clock.unref();
+  }
   function nextTurn(room) {
+    clearTimeout(room.clock);
+    room.revealed.clear();
     const state = room.state;
     const next = room.turns.shift();
     state.turn++;
     state.strokes = []; state.word = ''; state.guessed = false;
     if (!next) {
+      state.endsAt = null;
       state.status = 'finished'; state.drawer = null; state.choices = []; state.choosing = false;
     } else {
+      state.endsAt = Date.now() + 60000;
       state.round = next.round; state.drawer = next.id;
       const pool = [...words];
       state.choices = Array.from({ length: state.settings.choices }, () => pool.splice(randomInt(pool.length), 1)[0]);
       state.choosing = true;
     }
     sync(room);
+    if (next) tick(room);
   }
   function removePlayer(room, id) {
     const state = room.state;
@@ -46,12 +67,14 @@ export function attachMultiplayer(server) {
     room.turns = room.turns.filter((turn) => turn.id !== id);
     state.players.splice(index, 1);
     room.clients.delete(id);
-    if (!state.players.length) { rooms.delete(state.code); return; }
+    if (!state.players.length) { clearTimeout(room.clock); rooms.delete(state.code); return; }
     if (state.host === id) state.host = state.players[0].id;
     if (state.status === 'playing' && state.drawer === id) nextTurn(room);
     else sync(room);
   }
   wss.on('connection', (socket) => {
+    socket.alive = true;
+    socket.on('pong', () => { socket.alive = true; });
     let room, id;
     socket.on('message', (raw) => {
       let message;
@@ -65,7 +88,7 @@ export function attachMultiplayer(server) {
           if (rooms.size >= 500) return send(socket, { type: 'error', text: 'Server is full. Try again later.' });
           let code;
           do { code = Array.from({ length: 5 }, () => alphabet[randomInt(alphabet.length)]).join(''); } while (rooms.has(code));
-          room = { state: { code, host: id, status: 'lobby', players: [{ id, name, score: 0 }], settings: { rounds: 2, choices: 2 }, round: 0, turn: 0, word: '', choices: [], strokes: [] }, turns: [], clients: new Map(), timers: new Map() };
+          room = { state: { code, host: id, status: 'lobby', players: [{ id, name, score: 0 }], settings: { rounds: 2, choices: 2 }, round: 0, turn: 0, word: '', choices: [], strokes: [] }, turns: [], revealed: new Set(), clients: new Map(), timers: new Map() };
           rooms.set(code, room);
         } else {
           room = typeof message.code === 'string' && /^[A-Z0-9]{5}$/.test(message.code) ? rooms.get(message.code) : null;
@@ -86,6 +109,7 @@ export function attachMultiplayer(server) {
       if (!room || room.clients.get(id) !== socket) return;
       const state = room.state;
       if (message.type === 'leave') { removePlayer(room, id); room = null; return; }
+      if (state.status === 'playing' && Date.now() >= state.endsAt) { nextTurn(room); return; }
       if (message.type === 'settings' && id === state.host && state.status === 'lobby') {
         if (!Number.isInteger(message.rounds) || message.rounds < 2 || message.rounds > 5 || !Number.isInteger(message.choices) || message.choices < 2 || message.choices > 5) return;
         state.settings = { rounds: message.rounds, choices: message.choices }; sync(room);
@@ -109,6 +133,7 @@ export function attachMultiplayer(server) {
         if (!text || !player) return;
         if (text.toLowerCase() === state.word.toLowerCase()) {
           state.guessed = true; player.score++;
+          state.endsAt = Date.now() + 3000;
           broadcast(room, { type: 'message', name: player.name, text: 'guessed the word!', correct: true });
           sync(room);
         } else broadcast(room, { type: 'message', name: player.name, text });
@@ -123,6 +148,17 @@ export function attachMultiplayer(server) {
       room.timers.set(id, timer);
     });
     socket.on('error', () => {});
+  });
+  const heartbeat = setInterval(() => {
+    for (const socket of wss.clients) {
+      if (!socket.alive) socket.terminate();
+      else { socket.alive = false; socket.ping(); }
+    }
+  }, 30000);
+  heartbeat.unref();
+  wss.on('close', () => {
+    clearInterval(heartbeat);
+    for (const room of rooms.values()) { clearTimeout(room.clock); for (const timer of room.timers.values()) clearTimeout(timer); }
   });
   return wss;
 }

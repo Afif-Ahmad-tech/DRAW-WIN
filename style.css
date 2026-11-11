@@ -65,6 +65,9 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:pan-
   .game-bar{min-height:26px;margin-bottom:4px}
 }
 .setting-field{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:12px 0;font-size:14px}
+#connection-status{font:11px var(--mono);color:var(--muted);text-align:center}
+.turn-meta{display:flex;align-items:center;gap:12px}
+#turn-timer{font:600 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
 .setting-field select{font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:7px;background:var(--paper);color:var(--ink)}
 #host-settings{width:100%}
 #host-settings h2{margin:0}

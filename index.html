@@ -9,7 +9,7 @@
 </head>
 <body>
   <main id="app" class="shell">
-    <header class="topbar"><a class="brand" href="/">draw<span>win</span></a><span class="local-tag">ONLINE PLAY</span></header>
+    <header class="topbar"><a class="brand" href="/">draw<span>win</span></a><span id="connection-status" role="status"></span><span class="local-tag">ONLINE PLAY</span></header>
     <section id="home" class="home">
       <div class="intro">
         <div class="eyebrow">A little drawing goes a long way</div>
@@ -31,7 +31,7 @@
         <div class="lobby-side"><section id="host-settings"><h2>Game settings</h2><p>Everyone draws once per round.</p><label class="setting-field" for="rounds">Rounds<select id="rounds"><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label><label class="setting-field" for="choices-count">Word choices<select id="choices-count"><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label></section><p id="settings-summary" class="hidden"></p><p>At least 2 players needed. Up to 10 can join.</p><button id="start" class="primary" disabled>Start game <span>↗</span></button><div id="lobby-status" class="status">Waiting for players…</div></div>
       </div>
       <div id="game" class="game hidden">
-        <div class="game-main"><div class="game-bar"><div><div class="eyebrow" id="turn-label">ROUND 1</div><div id="game-prompt" class="prompt">Your turn to draw!</div></div><div id="word" class="word"></div></div>
+        <div class="game-main"><div class="game-bar"><div><div class="turn-meta"><div class="eyebrow" id="turn-label">ROUND 1</div><span id="turn-timer" role="timer" aria-label="Seconds remaining"></span></div><div id="game-prompt" class="prompt">Your turn to draw!</div></div><div id="word" class="word"></div></div>
           <div class="board-wrap"><canvas id="board" aria-label="Shared drawing board"></canvas><div id="board-hint" class="board-hint">Draw a clue for everyone</div><section id="word-choices" class="word-choices hidden" aria-label="Choose a word"><h2>Pick your word</h2><div id="word-options"></div></section></div>
           <div class="tools"><button id="clear" class="tool-button" aria-label="Clear drawing">↺ <span>Clear</span></button><div id="colours" class="colours hidden" role="group" aria-label="Drawing colours"></div><span id="tool-hint">Use your mouse or finger to draw</span></div>
         </div>
