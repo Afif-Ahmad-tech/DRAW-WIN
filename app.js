@@ -58,11 +58,12 @@ function connect(type, retry = false) {
     } else if (message.type === 'state') {
       const oldRound = state?.turn, oldStatus = state?.status;
       state = message.state;
-      if (oldRound !== state.turn || oldStatus !== state.status) { drawing = false; resetGuess(); $('messages').replaceChildren(); }
+      if (oldRound !== state.turn || oldStatus !== state.status) { drawing = false; resetGuess(); }
+      if (oldRound !== state.turn) $('flying-guesses').replaceChildren();
       render();
     } else if (message.type === 'stroke' && state && message.sender !== me) {
       state.strokes.push(message.stroke); drawStroke(message.stroke, false);
-    } else if (message.type === 'message') addMessage(message.name, message.text, message.correct);
+    } else if (message.type === 'message') showGuess(message.name, message.text, message.correct);
     else if (message.type === 'guess-result' && message.turn === state?.turn) {
       const nextInput = $('guess').value;
       resetGuess();
@@ -70,8 +71,8 @@ function connect(type, retry = false) {
       $('guess-feedback').textContent = message.correct ? 'You guessed right!' : message.close ? 'Close! Check your spelling.' : 'Not quite. Try again!';
       $('guess-feedback').classList.add(message.correct ? 'correct' : 'incorrect');
       if (!message.correct && !nextInput) {
-        rejectedGuess = message.guess.toUpperCase(); $('word').classList.add('guess-wrong'); previewGuess();
-        guessFlashTimer = setTimeout(() => { rejectedGuess = ''; $('word').classList.remove('guess-wrong'); previewGuess(); }, 650);
+        rejectedGuess = message.guess.toUpperCase(); $('guess-slots').classList.add('guess-wrong'); previewGuess();
+        guessFlashTimer = setTimeout(() => { rejectedGuess = ''; $('guess-slots').classList.remove('guess-wrong'); previewGuess(); }, 650);
       } else previewGuess();
     }
   };
@@ -92,6 +93,7 @@ function connect(type, retry = false) {
 }
 function leaveRoom() {
   resetGuess();
+  $('flying-guesses').replaceChildren();
   clearTimeout(retryTimer);
   sessionStorage.removeItem('activeRoom');
   send({ type: 'leave' });
@@ -134,7 +136,7 @@ function render() {
   const drawer = state.players.find((p)=>p.id===state.drawer);
   $('turn-label').textContent = `ROUND ${state.round} / ${settings.rounds}`;
   $('game-prompt').textContent = state.guessed ? `${drawer.name} drew ${state.word}` : drawingTurn ? 'Your turn to draw!' : `${drawer.name} is drawing…`;
-  $('word').textContent = state.choosing ? '' : drawingTurn && !state.guessed ? state.word.toUpperCase() : state.guessed ? '' : (state.mask || state.word.replace(/[a-z]/gi, '_')).split('').join(' ');
+  $('word').textContent = drawingTurn && !state.choosing && !state.guessed ? state.word.toUpperCase() : '';
   if (state.choosing) $('game-prompt').textContent = drawingTurn ? 'Choose a word to draw' : `${drawer.name} is choosing a word…`;
   $('word-choices').classList.toggle('hidden', !drawingTurn || !state.choosing);
   $('word-options').replaceChildren();
@@ -143,25 +145,28 @@ function render() {
     button.onclick = () => send({ type: 'choose', word }); $('word-options').append(button);
   }
   $('colours').classList.toggle('hidden', !drawingTurn);
+  $('drawing-tools').classList.toggle('hidden', !drawingTurn);
+  $('guess-dock').classList.toggle('hidden', drawingTurn);
   $('clear').disabled = !drawingTurn || state.choosing || state.guessed;
   $('board-hint').textContent = drawingTurn ? 'Draw a clue for everyone' : '';
   $('board').style.pointerEvents = drawingTurn && !state.choosing && !state.guessed ? 'auto' : 'none';
   $('guess').disabled = drawingTurn || state.choosing || state.guessed;
   $('guess').maxLength = state.mask?.length || 80;
-  $('guess').placeholder = drawingTurn ? 'You are drawing…' : state.guessed ? 'Round complete' : 'Type your guess…';
+  $('guess').setAttribute('aria-label', 'Your guess' + (state.mask ? ', ' + state.mask.length + ' letters. Pattern: ' + [...state.mask].map((letter) => letter === '_' ? 'blank' : letter).join(' ') : ''));
+  $('guess-slots').textContent = state.choosing ? 'Waiting for a word…' : '';
   previewGuess();
   redraw();
 }
 function resetGuess() {
   clearTimeout(guessFlashTimer); rejectedGuess = '';
   $('guess').value = ''; $('guess-feedback').textContent = ''; $('guess-feedback').classList.remove('correct', 'incorrect');
-  $('word').classList.remove('guess-wrong');
+  $('guess-slots').classList.remove('guess-wrong'); $('guess-slots').textContent = '';
 }
 function previewGuess() {
   if (!state || state.status !== 'playing' || state.drawer === me || state.choosing || state.guessed) return;
   const mask = state.mask || state.word.replace(/[a-z]/gi, '_');
   const typed = $('guess').value.trim().toUpperCase();
-  $('word').textContent = rejectedGuess || [...mask].map((letter, index) => typed[index] || letter.toUpperCase()).join(' ');
+  $('guess-slots').textContent = rejectedGuess || [...mask].map((letter, index) => typed[index] || letter.toUpperCase()).join('');
 }
 setInterval(() => {
   $('turn-timer').textContent = state?.status === 'playing' && state.endsAt ? Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)) + 's' : '';
@@ -177,7 +182,15 @@ function drawStroke(stroke, send=true) {
 }
 function redraw() { clearBoard(); for (const stroke of (state?.strokes || [])) drawStroke(stroke,false); }
 function clearBoard() { const c=$('board'); c.getContext('2d').clearRect(0,0,c.width,c.height); }
-function addMessage(name, text, correct=false) { const div=document.createElement('div'); div.className=`message${correct?' correct':''}`; div.innerHTML=`<strong>${escapeHtml(name)}</strong> ${escapeHtml(text)}`; $('messages').append(div); $('messages').scrollTop=$('messages').scrollHeight; }
+function showGuess(name, text, correct=false) {
+  const chip = document.createElement('div'); chip.className = 'flying-guess' + (correct ? ' correct' : '');
+  chip.textContent = name + ': ' + text;
+  chip.style.top = ($('flying-guesses').children.length % 3) * 36 + 'px';
+  if ($('flying-guesses').children.length >= 9) $('flying-guesses').firstElementChild.remove();
+  $('flying-guesses').append(chip);
+  chip.addEventListener('animationend', () => chip.remove(), { once: true });
+  setTimeout(() => chip.remove(), 7000);
+}
 
 $('create').onclick = () => { showError(''); connect('create'); };
 $('join').onclick = () => { showError(''); connect('join'); };
@@ -204,7 +217,7 @@ $('guess-form').onsubmit = (e) => {
 };
 $('guess').oninput = () => {
   clearTimeout(guessFlashTimer); rejectedGuess = '';
-  $('word').classList.remove('guess-wrong'); $('guess-feedback').textContent = '';
+  $('guess-slots').classList.remove('guess-wrong'); $('guess-feedback').textContent = '';
   previewGuess();
 };
 $('room-code').value = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
