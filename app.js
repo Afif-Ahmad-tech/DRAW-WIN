@@ -231,8 +231,9 @@ for (const [name, colour] of colours) {
 $('leave').onclick = leaveRoom;
 $('room-code').oninput = (e) => { e.target.value=e.target.value.replace(/[^0-9]/g,'').slice(0, 4); };
 $('board').onpointerdown = (e) => { if (!state || channel?.readyState !== WebSocket.OPEN || state.status!=='playing' || state.drawer!==me || state.choosing || state.guessed) return; drawing=true; lastPoint=point(e); $('board').setPointerCapture(e.pointerId); };
-$('board').onpointermove = (e) => { if (!drawing) return; const next=point(e); drawStroke({a:lastPoint,b:next,colour:selectedColour}); lastPoint=next; };
+$('board').onpointermove = (e) => { if (!drawing || !(e.buttons & 1)) return; const next=point(e); drawStroke({a:lastPoint,b:next,colour:selectedColour}); lastPoint=next; };
 $('board').onpointerup = () => { drawing=false; };
+$('board').onpointercancel = () => { drawing=false; };
 $('clear').onclick = () => send({ type: 'clear' });
 $('guess-form').onsubmit = (e) => {
   e.preventDefault(); const text=$('guess').value.trim(); if(!text || !state || state.status!=='playing' || state.drawer===me || state.guessed) return;
