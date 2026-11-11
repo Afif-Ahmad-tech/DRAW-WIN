@@ -4,5 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.22.2"
   }
 }

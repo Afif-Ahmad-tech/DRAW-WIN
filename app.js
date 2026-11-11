@@ -1,73 +1,47 @@
 const $ = (id) => document.getElementById(id);
 const me = sessionStorage.playerId || (sessionStorage.playerId = crypto.randomUUID());
-// shortcut: room state stays in one browser profile; use a server for cross-device play.
-const words = ['pancake', 'octopus', 'spaceship', 'watermelon', 'guitar', 'volcano', 'butterfly', 'castle'];
 let room, channel, drawing = false, lastPoint, state;
 
 function showError(message) { $('error').textContent = message; }
-function loadRoom(code) {
-  try { return JSON.parse(localStorage.getItem(`drawwin:${code}`)); } catch { return null; }
-}
-function save() {
-  localStorage.setItem(`drawwin:${room}`, JSON.stringify(state));
-  channel.postMessage({ type: 'state', state });
-  render();
-}
-function createRoom() {
-  room = Math.random().toString(36).slice(2, 7).toUpperCase();
-  state = { code: room, host: me, status: 'lobby', players: [{ id: me, name: getName(), score: 0 }], round: 0, strokes: [] };
-  localStorage.setItem(`drawwin:${room}`, JSON.stringify(state));
-  enterRoom();
-}
-function joinRoom() {
-  room = $('room-code').value.trim().toUpperCase();
-  state = loadRoom(room);
-  if (!state) return showError('That room code was not found.');
-  if (state.players.some((p) => p.id === me)) return enterRoom();
-  if (state.status !== 'lobby') return showError('This game has already started.');
-  if (state.players.length >= 10) return showError('This room is full (10 players max).');
-  state.players.push({ id: me, name: getName(), score: 0 });
-  enterRoom();
-  save();
-}
 function getName() { return $('name').value.trim() || 'Player'; }
-function enterRoom() {
+function send(message) { if (channel?.readyState === WebSocket.OPEN) channel.send(JSON.stringify(message)); }
+function connect(type) {
   if (channel) channel.close();
-  channel = new BroadcastChannel(`drawwin:${room}`);
-  channel.onmessage = ({ data }) => {
-    if (data.type === 'state') { state = data.state; localStorage.setItem(`drawwin:${room}`, JSON.stringify(state)); render(); }
-    if (data.type === 'stroke') { state.strokes.push(data.stroke); drawStroke(data.stroke, false); }
-    if (data.type === 'guess') addMessage(data.name, data.text);
-    if (data.type === 'correct') { addMessage(data.name, 'guessed the word!', true); state = data.state; saveLocal(); render(); }
+  const code = $('room-code').value.trim().toUpperCase();
+  if (type === 'join' && !/^[A-Z0-9]{5}$/.test(code)) return showError('Enter a five-character room code.');
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const endpoint = location.hostname.endsWith('.vercel.app') ? 'wss://draw-win-game.onrender.com' : `${protocol}//${location.host}`;
+  const socket = channel = new WebSocket(endpoint);
+  socket.onopen = () => send({ type, id: me, name: getName(), code });
+  socket.onmessage = ({ data }) => {
+    const message = JSON.parse(data);
+    if (message.type === 'error') { showError(message.text); socket.close(); return; }
+    if (message.type === 'joined') {
+      state = message.state; room = state.code;
+      $('home').classList.add('hidden'); $('room').classList.remove('hidden');
+      history.replaceState(null, '', `?room=${room}`);
+      render();
+    } else if (message.type === 'state') {
+      const oldRound = state?.round, oldStatus = state?.status;
+      state = message.state;
+      if (oldRound !== state.round || oldStatus !== state.status) $('messages').replaceChildren();
+      render();
+    } else if (message.type === 'stroke' && state && message.sender !== me) {
+      state.strokes.push(message.stroke); drawStroke(message.stroke, false);
+    } else if (message.type === 'message') addMessage(message.name, message.text, message.correct);
   };
-  $('home').classList.add('hidden'); $('room').classList.remove('hidden');
-  render();
-}
-function saveLocal() { localStorage.setItem(`drawwin:${room}`, JSON.stringify(state)); }
-function startGame() {
-  if (state.players.length < 2 || me !== state.host) return;
-  state.status = 'playing'; state.round = 0; nextTurn();
-}
-function nextTurn() {
-  state.round++;
-  if (state.round > state.players.length) { state.status = 'finished'; state.drawer = null; state.word = ''; }
-  else { state.drawer = state.players[(state.round - 1) % state.players.length].id; state.word = words[Math.floor(Math.random() * words.length)]; state.guessed = false; state.strokes = []; }
-  clearBoard(); $('messages').replaceChildren(); save();
+  socket.onclose = () => {
+    if (channel !== socket) return;
+    channel = null;
+    if (state) { state = null; room = null; $('room').classList.add('hidden'); $('home').classList.remove('hidden'); showError('Connection lost. Join again with the room code.'); }
+  };
+  socket.onerror = () => showError('Could not connect to the game server. Please try again.');
 }
 function leaveRoom() {
-  if (state) {
-    const index = state.players.findIndex((player) => player.id === me);
-    if (state.status === 'playing' && index >= 0 && index < state.round) state.round--;
-    state.players = state.players.filter((player) => player.id !== me);
-    if (state.host === me) state.host = state.players[0]?.id;
-    if (!state.players.length) localStorage.removeItem(`drawwin:${room}`);
-    else {
-      if (state.status === 'playing' && state.drawer === me) nextTurn();
-      else { localStorage.setItem(`drawwin:${room}`, JSON.stringify(state)); }
-    }
-  }
-  if (channel) channel.close();
+  send({ type: 'leave' });
+  const socket = channel; channel = null; if (socket) socket.close();
   $('room').classList.add('hidden'); $('home').classList.remove('hidden'); state=null; room=null;
+  history.replaceState(null, '', location.pathname);
 }
 function render() {
   if (!state) return;
@@ -102,28 +76,32 @@ function point(event) { const r=$('board').getBoundingClientRect(); return { x:(
 function drawStroke(stroke, send=true) {
   const ctx=$('board').getContext('2d'), w=$('board').clientWidth, h=$('board').clientHeight;
   ctx.strokeStyle='#283026'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.beginPath(); ctx.moveTo(stroke.a.x*w,stroke.a.y*h); ctx.lineTo(stroke.b.x*w,stroke.b.y*h); ctx.stroke();
-  if (send) { state.strokes.push(stroke); channel.postMessage({type:'stroke',stroke}); }
+  if (send) { state.strokes.push(stroke); channel.send(JSON.stringify({type:'stroke',stroke})); }
 }
 function redraw() { clearBoard(); for (const stroke of (state?.strokes || [])) drawStroke(stroke,false); }
 function clearBoard() { const c=$('board'); c.getContext('2d').clearRect(0,0,c.width,c.height); }
 function addMessage(name, text, correct=false) { const div=document.createElement('div'); div.className=`message${correct?' correct':''}`; div.innerHTML=`<strong>${escapeHtml(name)}</strong> ${escapeHtml(text)}`; $('messages').append(div); $('messages').scrollTop=$('messages').scrollHeight; }
 
-$('create').onclick = () => { showError(''); createRoom(); };
-$('join').onclick = () => { showError(''); joinRoom(); };
-$('start').onclick = startGame;
-$('next').onclick = () => { if (me === state.host && state.status === 'playing') nextTurn(); };
+$('create').onclick = () => { showError(''); connect('create'); };
+$('join').onclick = () => { showError(''); connect('join'); };
+$('start').onclick = () => send({ type: 'start' });
+$('next').onclick = () => send({ type: 'next' });
 $('leave').onclick = leaveRoom;
 $('room-code').oninput = (e) => { e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); };
 $('board').onpointerdown = (e) => { if (!state || state.drawer!==me || state.guessed) return; drawing=true; lastPoint=point(e); $('board').setPointerCapture(e.pointerId); };
 $('board').onpointermove = (e) => { if (!drawing) return; const next=point(e); drawStroke({a:lastPoint,b:next}); lastPoint=next; };
 $('board').onpointerup = () => { drawing=false; };
-$('clear').onclick = () => { if(state?.drawer===me && !state.guessed) { state.strokes=[]; clearBoard(); save(); } };
+$('clear').onclick = () => send({ type: 'clear' });
 $('guess-form').onsubmit = (e) => {
   e.preventDefault(); const text=$('guess').value.trim(); if(!text || !state || state.status!=='playing' || state.drawer===me || state.guessed) return;
-  if(text.toLowerCase()===state.word.toLowerCase()) { state.guessed=true; const player=state.players.find((p)=>p.id===me); player.score++; save(); channel.postMessage({type:'correct',name:player.name,state}); addMessage(player.name,'guessed the word!',true); }
-  else { channel.postMessage({type:'guess',name:getName(),text}); addMessage(getName(),text); }
+  send({ type: 'guess', text });
   $('guess').value='';
 };
-window.addEventListener('storage', (e) => { if(e.key===`drawwin:${room}` && e.newValue) { state=JSON.parse(e.newValue); render(); } });
+$('room-code').value = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+$('invite').onclick = async () => {
+  const link = new URL(location.pathname, location.origin); link.searchParams.set('room', room);
+  try { await navigator.clipboard.writeText(link.href); $('invite').textContent = 'Link copied!'; }
+  catch { window.prompt('Copy this invite link:', link.href); }
+};
 window.addEventListener('resize', () => { const c=$('board'); if(!c || !state) return; c.width=c.clientWidth*devicePixelRatio; c.height=c.clientHeight*devicePixelRatio; c.getContext('2d').scale(devicePixelRatio,devicePixelRatio); redraw(); });
 new ResizeObserver(() => { const c=$('board'); if(c.clientWidth && c.width!==c.clientWidth*devicePixelRatio) { c.width=c.clientWidth*devicePixelRatio; c.height=c.clientHeight*devicePixelRatio; c.getContext('2d').scale(devicePixelRatio,devicePixelRatio); if(state) redraw(); } }).observe($('board'));
