@@ -251,11 +251,7 @@ if (getName()) {
   $('profile-avatar').textContent = getName()[0].toUpperCase();
   if (sessionStorage.activeRoom && sessionStorage.activeRoom === $('room-code').value) connect('join');
 } else $('profile-button').click();
-document.addEventListener('wheel', (event) => { if (event.ctrlKey || event.metaKey) event.preventDefault(); }, { passive: false });
-document.addEventListener('keydown', (event) => {
-  if ((event.ctrlKey || event.metaKey) && ['+', '=', '-', '0'].includes(event.key)) event.preventDefault();
-});
-for (const gesture of ['gesturestart', 'gesturechange']) document.addEventListener(gesture, (event) => event.preventDefault(), { passive: false });
+
 $('invite').onclick = async () => {
   const link = new URL(location.pathname, location.origin); link.searchParams.set('room', room);
   try { await navigator.clipboard.writeText(link.href); $('invite').textContent = 'Link copied!'; }
