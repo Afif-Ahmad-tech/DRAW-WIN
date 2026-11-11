@@ -78,17 +78,25 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   assert.equal(wrong.correct, false);
   assert.equal(wrong.guess, 'definitelywrong');
   assert.equal(wrong.turn, 1);
+  assert.equal(wrong.close, false);
+  b.send({ type: 'guess', text: options[0].slice(0, -1), turn: 1 });
+  const close = await b.next((m) => m.type === 'guess-result');
+  assert.equal(close.correct, false);
+  assert.equal(close.close, true);
   b.send({ type: 'guess', text: options[0] });
   assert.equal((await b.next((m) => m.type === 'guess-result')).correct, true);
   assert.equal((await c.next((m) => m.type === 'state' && m.state.guessed)).state.players[1].score, 1);
   a.send({ type: 'leave' });
   const next = await b.next((m) => m.type === 'state' && m.state.drawer === ids[1]);
   assert.equal(next.state.round, 1);
+  const shown = new Set(options);
+  for (const word of next.state.choices) { assert.equal(shown.has(word), false); shown.add(word); }
   for (let round = 1; round <= 5; round++) {
     for (const drawer of round === 1 ? [ids[2]] : [ids[1], ids[2]]) {
       b.send({ type: 'next' });
       const turn = await b.next((m) => m.type === 'state' && m.state.round === round && m.state.drawer === drawer);
       assert.equal(turn.state.round, round);
+      for (const word of turn.state.choices) { assert.equal(shown.has(word), false); shown.add(word); }
     }
   }
   b.send({ type: 'next' });

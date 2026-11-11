@@ -67,7 +67,7 @@ function connect(type, retry = false) {
       const nextInput = $('guess').value;
       resetGuess();
       if (!message.correct && nextInput) $('guess').value = nextInput;
-      $('guess-feedback').textContent = message.correct ? 'You guessed right!' : 'Not quite. Try again!';
+      $('guess-feedback').textContent = message.correct ? 'You guessed right!' : message.close ? 'Close! Check your spelling.' : 'Not quite. Try again!';
       $('guess-feedback').classList.add(message.correct ? 'correct' : 'incorrect');
       if (!message.correct && !nextInput) {
         rejectedGuess = message.guess.toUpperCase(); $('word').classList.add('guess-wrong'); previewGuess();

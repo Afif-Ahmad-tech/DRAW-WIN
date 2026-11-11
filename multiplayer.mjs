@@ -1,7 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { randomInt } from 'node:crypto';
-
-const words = ['pancake', 'octopus', 'spaceship', 'watermelon', 'guitar', 'volcano', 'butterfly', 'castle'];
+import { drawWords, isCloseGuess } from './word-bank.mjs';
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const colours = ['#283026', '#e53935', '#f28c28', '#f5c518', '#43a047', '#1e88e5', '#8e44ad'];
 
@@ -53,8 +52,7 @@ export function attachMultiplayer(server) {
     } else {
       state.endsAt = Date.now() + 60000;
       state.round = next.round; state.drawer = next.id;
-      const pool = [...words];
-      state.choices = Array.from({ length: state.settings.choices }, () => pool.splice(randomInt(pool.length), 1)[0]);
+      state.choices = drawWords(room.wordPool, state.settings.choices);
       state.choosing = true;
     }
     sync(room);
@@ -89,7 +87,7 @@ export function attachMultiplayer(server) {
           if (rooms.size >= 500) return send(socket, { type: 'error', text: 'Server is full. Try again later.' });
           let code;
           do { code = Array.from({ length: 5 }, () => alphabet[randomInt(alphabet.length)]).join(''); } while (rooms.has(code));
-          room = { state: { code, host: id, status: 'lobby', players: [{ id, name, score: 0 }], settings: { rounds: 2, choices: 2 }, round: 0, turn: 0, word: '', choices: [], strokes: [] }, turns: [], revealed: new Set(), clients: new Map(), timers: new Map() };
+          room = { state: { code, host: id, status: 'lobby', players: [{ id, name, score: 0 }], settings: { rounds: 2, choices: 2 }, round: 0, turn: 0, word: '', choices: [], strokes: [] }, turns: [], wordPool: [], revealed: new Set(), clients: new Map(), timers: new Map() };
           rooms.set(code, room);
         } else {
           room = typeof message.code === 'string' && /^[A-Z0-9]{5}$/.test(message.code) ? rooms.get(message.code) : null;
@@ -133,7 +131,7 @@ export function attachMultiplayer(server) {
         if (message.turn !== undefined && message.turn !== state.turn) return;
         const text = message.text.trim().slice(0, 80), player = state.players.find((p) => p.id === id);
         if (!text || !player) return;
-        send(socket, { type: 'guess-result', turn: state.turn, correct: text.toLowerCase() === state.word.toLowerCase(), guess: text });
+        send(socket, { type: 'guess-result', turn: state.turn, correct: text.toLowerCase() === state.word.toLowerCase(), close: isCloseGuess(text, state.word), guess: text });
         if (text.toLowerCase() === state.word.toLowerCase()) {
           state.guessed = true; player.score++;
           state.endsAt = Date.now() + 3000;
