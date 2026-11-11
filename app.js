@@ -68,7 +68,7 @@ function connect(type, retry = false) {
       const nextInput = $('guess').value;
       resetGuess();
       if (!message.correct && nextInput) $('guess').value = nextInput;
-      $('guess-feedback').textContent = message.correct ? 'You guessed right!' : message.close ? 'Close! Check your spelling.' : 'Not quite. Try again!';
+      $('guess-feedback').textContent = message.correct ? `You guessed right! +${message.points} points` : message.close ? 'Close! Check your spelling.' : 'Not quite. Try again!';
       $('guess-feedback').classList.add(message.correct ? 'correct' : 'incorrect');
       if (!message.correct && !nextInput) {
         rejectedGuess = message.guess.toUpperCase(); $('guess-slots').classList.add('guess-wrong'); previewGuess();
@@ -128,7 +128,9 @@ function render() {
     const standings = state.leaderboard || [];
     $('results-title').textContent = state.status === 'finished' ? 'Final leaderboard' : 'Turn complete';
     const ownResult = standings.find((p) => p.id === me);
-    $('results-summary').textContent = state.status === 'finished' ? `${standings[0]?.name || 'Player'} wins!` : (ownResult?.gained > 0 ? 'You guessed right! ' : '') + (state.word ? `The word was ${state.word}.` : 'No word was selected.');
+    const winners = standings.filter((p) => p.score === standings[0]?.score).map((p) => p.name);
+    const winnerText = winners.length > 1 ? `${winners.join(', ')} tie for first!` : `${winners[0] || 'Player'} wins!`;
+    $('results-summary').textContent = state.status === 'finished' ? winnerText : (ownResult?.gained > 0 ? `You earned ${ownResult.gained} points! ` : '') + (state.word ? `The word was ${state.word}.` : 'No word was selected.');
     $('leaderboard').innerHTML = standings.map((p, index) => `<li class="leaderboard-row"><span class="rank">${index + 1}</span><span class="leaderboard-name">${escapeHtml(p.name)}${p.id === me ? ' (you)' : ''}</span><span class="turn-gain">+${p.gained} this turn</span><strong>${p.score} pts</strong></li>`).join('');
     return;
   }
