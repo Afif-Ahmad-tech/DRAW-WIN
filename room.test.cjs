@@ -5,7 +5,7 @@ const { randomUUID } = require('node:crypto');
 const WebSocket = require('ws');
 const { once } = require('node:events');
 
-test('separate clients can join, draw, guess and continue after the drawer leaves', async (t) => {
+test('clients can join, reconnect, draw, guess and continue after the drawer leaves', async (t) => {
   const { attachMultiplayer } = await import('./multiplayer.mjs');
   const server = createServer();
   const wss = attachMultiplayer(server);
@@ -25,6 +25,7 @@ test('separate clients can join, draw, guess and continue after the drawer leave
     });
     await once(socket, 'open');
     return {
+      close: () => socket.close(),
       send: (message) => socket.send(JSON.stringify(message)),
       next: (predicate) => {
         const index = queue.findIndex(predicate);
@@ -32,7 +33,8 @@ test('separate clients can join, draw, guess and continue after the drawer leave
       }
     };
   }
-  const a = await client(), b = await client(), c = await client();
+  let a = await client();
+  const b = await client(), c = await client();
   const ids = [randomUUID(), randomUUID(), randomUUID()];
   a.send({ type: 'create', id: ids[0], name: 'A' });
   const created = await a.next((m) => m.type === 'joined');
@@ -44,6 +46,12 @@ test('separate clients can join, draw, guess and continue after the drawer leave
   a.send({ type: 'start' });
   const playing = await b.next((m) => m.type === 'state' && m.state.status === 'playing');
   assert.equal(playing.state.drawer, ids[0]);
+  a.close();
+  a = await client();
+  a.send({ type: 'join', code: created.state.code, id: ids[0], name: 'A' });
+  const rejoined = await a.next((m) => m.type === 'joined');
+  assert.equal(rejoined.state.status, 'playing');
+  assert.equal(rejoined.state.players.length, 3);
   a.send({ type: 'stroke', stroke: { a: { x: 0.1, y: 0.2 }, b: { x: 0.3, y: 0.4 } } });
   assert.equal((await b.next((m) => m.type === 'stroke')).sender, ids[0]);
   b.send({ type: 'guess', text: playing.state.word });

@@ -18,6 +18,8 @@ function connect(type) {
     if (message.type === 'error') { showError(message.text); socket.close(); return; }
     if (message.type === 'joined') {
       state = message.state; room = state.code;
+      sessionStorage.activeRoom = room;
+      sessionStorage.playerName = state.players.find((p) => p.id === me).name;
       $('home').classList.add('hidden'); $('room').classList.remove('hidden');
       history.replaceState(null, '', `?room=${room}`);
       render();
@@ -38,6 +40,7 @@ function connect(type) {
   socket.onerror = () => showError('Could not connect to the game server. Please try again.');
 }
 function leaveRoom() {
+  sessionStorage.removeItem('activeRoom');
   send({ type: 'leave' });
   const socket = channel; channel = null; if (socket) socket.close();
   $('room').classList.add('hidden'); $('home').classList.remove('hidden'); state=null; room=null;
@@ -98,10 +101,17 @@ $('guess-form').onsubmit = (e) => {
   $('guess').value='';
 };
 $('room-code').value = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+$('name').value = sessionStorage.playerName || '';
+if (sessionStorage.activeRoom && sessionStorage.activeRoom === $('room-code').value) connect('join');
+document.addEventListener('wheel', (event) => { if (event.ctrlKey || event.metaKey) event.preventDefault(); }, { passive: false });
+document.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && ['+', '=', '-', '0'].includes(event.key)) event.preventDefault();
+});
+for (const gesture of ['gesturestart', 'gesturechange']) document.addEventListener(gesture, (event) => event.preventDefault(), { passive: false });
 $('invite').onclick = async () => {
   const link = new URL(location.pathname, location.origin); link.searchParams.set('room', room);
   try { await navigator.clipboard.writeText(link.href); $('invite').textContent = 'Link copied!'; }
   catch { window.prompt('Copy this invite link:', link.href); }
 };
 window.addEventListener('resize', () => { const c=$('board'); if(!c || !state) return; c.width=c.clientWidth*devicePixelRatio; c.height=c.clientHeight*devicePixelRatio; c.getContext('2d').scale(devicePixelRatio,devicePixelRatio); redraw(); });
-new ResizeObserver(() => { const c=$('board'); if(c.clientWidth && c.width!==c.clientWidth*devicePixelRatio) { c.width=c.clientWidth*devicePixelRatio; c.height=c.clientHeight*devicePixelRatio; c.getContext('2d').scale(devicePixelRatio,devicePixelRatio); if(state) redraw(); } }).observe($('board'));
+new ResizeObserver(() => { const c=$('board'); if(c.clientWidth && (c.width!==Math.round(c.clientWidth*devicePixelRatio) || c.height!==Math.round(c.clientHeight*devicePixelRatio))) { c.width=c.clientWidth*devicePixelRatio; c.height=c.clientHeight*devicePixelRatio; c.getContext('2d').scale(devicePixelRatio,devicePixelRatio); if(state) redraw(); } }).observe($('board'));
