@@ -107,6 +107,7 @@ export function attachMultiplayer(server) {
           if (!player && room.state.status !== 'lobby') { room = null; return send(socket, { type: 'error', text: 'This game has already started.' }); }
           if (!player && room.state.players.length >= 10) { room = null; return send(socket, { type: 'error', text: 'This room is full (10 players max).' }); }
           if (!player) room.state.players.push({ id, name, score: 0 });
+          else player.name = name;
         }
         clearTimeout(room.timers.get(id)); room.timers.delete(id);
         const previous = room.clients.get(id);
@@ -119,6 +120,14 @@ export function attachMultiplayer(server) {
       if (!room || room.clients.get(id) !== socket) return;
       const state = room.state;
       if (message.type === 'leave') { removePlayer(room, id); room = null; return; }
+      if (message.type === 'rename') {
+        const name = typeof message.name === 'string' ? message.name.trim().slice(0, 18) : '';
+        if (!name) return;
+        state.players.find((p) => p.id === id).name = name;
+        const standing = state.leaderboard?.find((p) => p.id === id);
+        if (standing) standing.name = name;
+        sync(room); return;
+      }
       if (['playing', 'leaderboard'].includes(state.status) && Date.now() >= state.endsAt) {
         if (state.status === 'leaderboard') nextTurn(room); else endTurn(room);
         return;

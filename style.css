@@ -135,3 +135,13 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:pan-
 .flying-guess.correct{background:var(--green);font-weight:600}
 @keyframes guess-fly{from{transform:translateX(100vw)}to{transform:translateX(calc(-100% - 16px))}}
 @media(prefers-reduced-motion:reduce){.flying-guess{left:50%;transform:translateX(-50%);animation:guess-fade 6s linear forwards}@keyframes guess-fade{0%,100%{opacity:0}10%,90%{opacity:1}}}
+.profile-button{display:flex;align-items:center;gap:8px;max-width:48%;padding:6px 10px;border:1px solid #d7dacd;border-radius:30px;background:var(--paper);color:var(--ink);font:600 12px var(--display);cursor:pointer}
+.profile-button:focus-visible{outline:3px solid #94bd61;outline-offset:2px}
+#profile-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profile-button .avatar{width:25px;height:25px}
+#profile-dialog{width:min(360px,calc(100% - 32px));padding:28px;border:1px solid var(--line);border-radius:14px;background:var(--paper);box-shadow:0 20px 70px #20231f33;color:var(--ink)}
+#profile-dialog::backdrop{background:#20231f88}
+#profile-dialog h2{margin:0 0 8px;font-size:26px}
+#profile-dialog p{margin:0 0 22px;color:var(--muted);font-size:14px}
+#profile-input{width:100%;height:49px;padding:0 14px;border:1px solid #dcded4;border-radius:8px;background:var(--paper)}
+.profile-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}

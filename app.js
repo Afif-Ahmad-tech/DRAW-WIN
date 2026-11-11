@@ -7,13 +7,14 @@ let rejectedGuess = '', guessFlashTimer;
 const colours = [['Black', '#283026'], ['Red', '#e53935'], ['Orange', '#f28c28'], ['Yellow', '#f5c518'], ['Green', '#43a047'], ['Blue', '#1e88e5'], ['Purple', '#8e44ad']];
 
 function showError(message) { $('error').textContent = message; }
-function getName() { return $('name').value.trim() || 'Player'; }
+function getName() { return localStorage.playerName?.trim() || ''; }
 function connectionStatus(text) { $('connection-status').textContent = text; }
 function send(message) {
   if (channel?.readyState !== WebSocket.OPEN) { connectionStatus('Reconnecting…'); return false; }
   channel.send(JSON.stringify(message)); return true;
 }
 function connect(type, retry = false) {
+  if (!getName()) { $('profile-dialog').showModal(); return; }
   clearTimeout(retryTimer);
   const previous = channel; channel = null; if (previous) previous.close();
   if (!retry) retries = 0;
@@ -51,7 +52,6 @@ function connect(type, retry = false) {
       clearTimeout(timeout); retries = 0; connectionStatus('Connected');
       $('create').disabled = $('join').disabled = false;
       sessionStorage.activeRoom = room;
-      sessionStorage.playerName = state.players.find((p) => p.id === me).name;
       $('home').classList.add('hidden'); $('room').classList.remove('hidden');
       history.replaceState(null, '', `?room=${room}`);
       render();
@@ -194,6 +194,25 @@ function showGuess(name, text, correct=false) {
 
 $('create').onclick = () => { showError(''); connect('create'); };
 $('join').onclick = () => { showError(''); connect('join'); };
+$('profile-button').onclick = () => {
+  $('profile-input').value = getName();
+  $('profile-cancel').classList.toggle('hidden', !getName());
+  $('profile-dialog').showModal();
+};
+$('profile-cancel').onclick = () => $('profile-dialog').close();
+$('profile-dialog').oncancel = (event) => { if (!getName()) event.preventDefault(); };
+$('profile-input').oninput = () => $('profile-input').setCustomValidity('');
+$('profile-form').onsubmit = (event) => {
+  event.preventDefault();
+  const name = $('profile-input').value.trim();
+  if (!name) { $('profile-input').setCustomValidity('Enter a name.'); $('profile-input').reportValidity(); return; }
+  localStorage.playerName = name;
+  $('profile-name').textContent = name;
+  $('profile-avatar').textContent = name[0].toUpperCase();
+  $('profile-dialog').close();
+  if (state) send({ type: 'rename', name });
+  else if (sessionStorage.activeRoom && sessionStorage.activeRoom === $('room-code').value) connect('join');
+};
 $('start').onclick = () => send({ type: 'start' });
 for (const id of ['rounds', 'choices-count']) $(id).onchange = () => send({ type: 'settings', rounds: Number($('rounds').value), choices: Number($('choices-count').value) });
 for (const [name, colour] of colours) {
@@ -221,8 +240,12 @@ $('guess').oninput = () => {
   previewGuess();
 };
 $('room-code').value = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
-$('name').value = sessionStorage.playerName || '';
-if (sessionStorage.activeRoom && sessionStorage.activeRoom === $('room-code').value) connect('join');
+if (!getName() && sessionStorage.playerName) localStorage.playerName = sessionStorage.playerName.trim();
+if (getName()) {
+  $('profile-name').textContent = getName();
+  $('profile-avatar').textContent = getName()[0].toUpperCase();
+  if (sessionStorage.activeRoom && sessionStorage.activeRoom === $('room-code').value) connect('join');
+} else $('profile-button').click();
 document.addEventListener('wheel', (event) => { if (event.ctrlKey || event.metaKey) event.preventDefault(); }, { passive: false });
 document.addEventListener('keydown', (event) => {
   if ((event.ctrlKey || event.metaKey) && ['+', '=', '-', '0'].includes(event.key)) event.preventDefault();

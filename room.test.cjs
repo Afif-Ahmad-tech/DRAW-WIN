@@ -49,6 +49,14 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
     await client.next((m) => m.type === 'joined');
   }
   await a.next((m) => m.type === 'state' && m.state.players.length === 3);
+  b.send({ type: 'rename', name: '  Bee  ' });
+  const renamed = await a.next((m) => m.type === 'state' && m.state.players[1]?.name === 'Bee');
+  assert.equal(renamed.state.players[1].name, 'Bee');
+  await b.next((m) => m.type === 'state' && m.state.players[1]?.name === 'Bee');
+  b.send({ type: 'rename', name: '   ' });
+  b.send({ type: 'ping' });
+  await b.next((m) => m.type === 'pong');
+  assert.equal(b.state().players[1].name, 'Bee');
   b.send({ type: 'settings', rounds: 3, choices: 3 });
   a.send({ type: 'settings', rounds: 5, choices: 5 });
   await b.next((m) => m.type === 'state' && m.state.settings.rounds === 5);
@@ -69,10 +77,11 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   assert.equal(ready.state.word, '');
   a.close();
   a = await client();
-  a.send({ type: 'join', code: created.state.code, id: ids[0], name: 'A' });
+  a.send({ type: 'join', code: created.state.code, id: ids[0], name: 'A-new' });
   const rejoined = await a.next((m) => m.type === 'joined');
   assert.equal(rejoined.state.status, 'playing');
   assert.equal(rejoined.state.players.length, 3);
+  assert.equal(rejoined.state.players[0].name, 'A-new');
   a.send({ type: 'stroke', stroke: { a: { x: 0.1, y: 0.2 }, b: { x: 0.3, y: 0.4 }, colour: '#1e88e5' } });
   const stroke = await b.next((m) => m.type === 'stroke');
   assert.equal(stroke.sender, ids[0]);
@@ -94,6 +103,9 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   assert.equal(results.state.leaderboard[0].id, ids[1]);
   assert.equal(results.state.leaderboard[0].gained, 1);
   assert.equal(results.state.endsAt, Date.now() + 5000);
+  b.send({ type: 'rename', name: 'Winner' });
+  const updatedResults = await c.next((m) => m.type === 'state' && m.state.leaderboard?.[0]?.name === 'Winner');
+  assert.equal(updatedResults.state.players[1].name, 'Winner');
   a.send({ type: 'leave' });
   await b.next((m) => m.type === 'state' && m.state.status === 'leaderboard' && m.state.players.length === 2);
   t.mock.timers.tick(5000);

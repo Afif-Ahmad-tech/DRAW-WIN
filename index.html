@@ -10,14 +10,12 @@
 <body>
   <div id="flying-guesses" aria-live="polite" aria-relevant="additions"></div>
   <main id="app" class="shell">
-    <header class="topbar"><a class="brand" href="/">draw<span>win</span></a><span id="connection-status" role="status"></span><span class="local-tag">ONLINE PLAY</span></header>
+    <header class="topbar"><a class="brand" href="/">draw<span>win</span></a><span id="connection-status" role="status"></span><button id="profile-button" class="profile-button" type="button" aria-label="Edit profile"><span id="profile-avatar" class="avatar"></span><span id="profile-name"></span><span aria-hidden="true">✎</span></button></header>
     <section id="home" class="home">
       <div class="intro">
         <div class="eyebrow">A little drawing goes a long way</div>
         <h1>Draw it.<br><span>Guess it.</span></h1>
         <p>Make a private room and get your people together for a quick drawing game.</p>
-        <label class="field-label" for="name">YOUR NAME</label>
-        <input id="name" maxlength="18" placeholder="What should we call you?" autocomplete="nickname">
         <div class="home-actions"><button id="create" class="primary">Create a room <span>↗</span></button><div class="or">OR JOIN ONE</div>
           <div class="join-row"><input id="room-code" maxlength="5" placeholder="ROOM CODE" aria-label="Room code"><button id="join" class="secondary">Join room</button></div>
         </div>
@@ -42,5 +40,6 @@
       <section id="turn-results" class="turn-results hidden" aria-labelledby="results-title"><h2 id="results-title">Turn complete</h2><p id="results-summary"></p><ol id="leaderboard" aria-label="Player rankings"></ol><p id="results-countdown" role="status"></p></section>
     </section>
   </main>
+  <dialog id="profile-dialog" aria-labelledby="profile-title"><form id="profile-form"><h2 id="profile-title">Your profile</h2><p>Choose the name other players will see.</p><label class="field-label" for="profile-input">YOUR NAME</label><input id="profile-input" maxlength="18" autocomplete="nickname" required><div class="profile-actions"><button id="profile-cancel" class="secondary" type="button">Cancel</button><button class="primary" type="submit">Save name</button></div></form></dialog>
 </body>
 </html>
