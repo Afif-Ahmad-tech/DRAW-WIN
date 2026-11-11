@@ -1,8 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { randomInt } from 'node:crypto';
 import { drawWords, isCloseGuess } from './word-bank.mjs';
-const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const colours = ['#283026', '#e53935', '#f28c28', '#f5c518', '#43a047', '#1e88e5', '#8e44ad'];
+const colours = ['#283026', '#e53935', '#f28c28', '#f5c518', '#43a047', '#1e88e5', '#8e44ad', '#8d6e63', '#ffffff'];
 
 export function attachMultiplayer(server) {
   // shortcut: rooms disappear on restart; use shared storage when persistence is needed.
@@ -100,11 +99,11 @@ export function attachMultiplayer(server) {
         if (message.type === 'create') {
           if (rooms.size >= 500) return send(socket, { type: 'error', text: 'Server is full. Try again later.' });
           let code;
-          do { code = Array.from({ length: 5 }, () => alphabet[randomInt(alphabet.length)]).join(''); } while (rooms.has(code));
+          do { code = String(randomInt(10000)).padStart(4, '0'); } while (rooms.has(code));
           room = { state: { code, host: id, status: 'lobby', players: [{ id, name, score: 0 }], settings: { rounds: 2, choices: 2 }, round: 0, turn: 0, word: '', choices: [], strokes: [] }, turns: [], wordPool: [], revealed: new Set(), correct: new Set(), wrongGuesses: new Map(), clients: new Map(), timers: new Map() };
           rooms.set(code, room);
         } else {
-          room = typeof message.code === 'string' && /^[A-Z0-9]{5}$/.test(message.code) ? rooms.get(message.code) : null;
+          room = typeof message.code === 'string' && /^[0-9]{4}$/.test(message.code) ? rooms.get(message.code) : null;
           if (!room) return send(socket, { type: 'error', text: 'That room code was not found.' });
           const player = room.state.players.find((p) => p.id === id);
           if (!player && room.state.status !== 'lobby') { room = null; return send(socket, { type: 'error', text: 'This game has already started.' }); }

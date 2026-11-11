@@ -41,7 +41,13 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   const ids = [randomUUID(), randomUUID(), randomUUID()];
   a.send({ type: 'create', id: ids[0], name: 'A' });
   const created = await a.next((m) => m.type === 'joined');
+  assert.match(created.state.code, /^[0-9]{4}$/);
   assert.deepEqual(created.state.settings, { rounds: 2, choices: 2 });
+  const invalid = await client();
+  for (const code of ['AB12', '12345']) {
+    invalid.send({ type: 'join', code, id: randomUUID(), name: 'Invalid' });
+    assert.equal((await invalid.next((m) => m.type === 'error')).text, 'That room code was not found.');
+  }
   a.send({ type: 'ping' });
   await a.next((m) => m.type === 'pong');
   for (const [client, id, name] of [[b, ids[1], 'B'], [c, ids[2], 'C']]) {
@@ -86,6 +92,10 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   const stroke = await b.next((m) => m.type === 'stroke');
   assert.equal(stroke.sender, ids[0]);
   assert.equal(stroke.stroke.colour, '#1e88e5');
+  for (const colour of ['#8d6e63', '#ffffff']) {
+    a.send({ type: 'stroke', stroke: { a: { x: 0.2, y: 0.3 }, b: { x: 0.4, y: 0.5 }, colour } });
+    assert.equal((await b.next((m) => m.type === 'stroke' && m.stroke.colour === colour)).stroke.colour, colour);
+  }
   b.send({ type: 'guess', text: 'definitelywrong', turn: 1 });
   const wrong = await b.next((m) => m.type === 'guess-result');
   assert.equal(wrong.correct, false);

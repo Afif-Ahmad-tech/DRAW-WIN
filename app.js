@@ -4,7 +4,7 @@ let room, channel, drawing = false, lastPoint, state;
 let selectedColour = '#283026';
 let retryTimer, retries = 0;
 let rejectedGuess = '', guessFlashTimer;
-const colours = [['Black', '#283026'], ['Red', '#e53935'], ['Orange', '#f28c28'], ['Yellow', '#f5c518'], ['Green', '#43a047'], ['Blue', '#1e88e5'], ['Purple', '#8e44ad']];
+const colours = [['Black', '#283026'], ['Red', '#e53935'], ['Orange', '#f28c28'], ['Yellow', '#f5c518'], ['Green', '#43a047'], ['Blue', '#1e88e5'], ['Purple', '#8e44ad'], ['Brown', '#8d6e63'], ['White', '#ffffff']];
 
 function showError(message) { $('error').textContent = message; }
 function getName() { return localStorage.playerName?.trim() || ''; }
@@ -18,8 +18,8 @@ function connect(type, retry = false) {
   clearTimeout(retryTimer);
   const previous = channel; channel = null; if (previous) previous.close();
   if (!retry) retries = 0;
-  const code = retry ? room || sessionStorage.activeRoom || $('room-code').value.trim().toUpperCase() : $('room-code').value.trim().toUpperCase();
-  if (type === 'join' && !/^[A-Z0-9]{5}$/.test(code)) return showError('Enter a five-character room code.');
+  const code = retry ? room || sessionStorage.activeRoom || $('room-code').value.trim() : $('room-code').value.trim();
+  if (type === 'join' && !/^[0-9]{4}$/.test(code)) return showError('Enter a four-digit room code.');
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const endpoint = `${protocol}//${location.host}`;
   const socket = channel = new WebSocket(endpoint);
@@ -219,6 +219,7 @@ $('start').onclick = () => send({ type: 'start' });
 for (const id of ['rounds', 'choices-count']) $(id).onchange = () => send({ type: 'settings', rounds: Number($('rounds').value), choices: Number($('choices-count').value) });
 for (const [name, colour] of colours) {
   const button = document.createElement('button'); button.className = 'colour-swatch'; button.style.backgroundColor = colour;
+  if (colour === '#ffffff') button.style.borderColor = '#b8bcb1';
   button.setAttribute('aria-label', name); button.setAttribute('aria-pressed', String(colour === selectedColour));
   button.onclick = () => {
     selectedColour = colour;
@@ -227,7 +228,7 @@ for (const [name, colour] of colours) {
   $('colours').append(button);
 }
 $('leave').onclick = leaveRoom;
-$('room-code').oninput = (e) => { e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); };
+$('room-code').oninput = (e) => { e.target.value=e.target.value.replace(/[^0-9]/g,'').slice(0, 4); };
 $('board').onpointerdown = (e) => { if (!state || channel?.readyState !== WebSocket.OPEN || state.status!=='playing' || state.drawer!==me || state.choosing || state.guessed) return; drawing=true; lastPoint=point(e); $('board').setPointerCapture(e.pointerId); };
 $('board').onpointermove = (e) => { if (!drawing) return; const next=point(e); drawStroke({a:lastPoint,b:next,colour:selectedColour}); lastPoint=next; };
 $('board').onpointerup = () => { drawing=false; };
@@ -241,7 +242,8 @@ $('guess').oninput = () => {
   $('guess-slots').classList.remove('guess-wrong'); $('guess-feedback').textContent = '';
   previewGuess();
 };
-$('room-code').value = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+const inviteCode = new URLSearchParams(location.search).get('room') || '';
+$('room-code').value = /^[0-9]{4}$/.test(inviteCode) ? inviteCode : '';
 if (!getName() && sessionStorage.playerName) localStorage.playerName = sessionStorage.playerName.trim();
 if (getName()) {
   $('profile-name').textContent = getName();
