@@ -4,6 +4,12 @@ import { drawWords, isCloseGuess, words } from './word-bank.mjs';
 import { difficultyWords } from './difficulty-words.mjs';
 const colours = ['#283026', '#e53935', '#f28c28', '#f5c518', '#43a047', '#1e88e5', '#8e44ad', '#8d6e63', '#ffffff'];
 
+export function drawerPoints(correct, guessers) {
+  if (!correct || guessers <= 0) return 0;
+  if (correct === guessers) return 80;
+  return correct * 10 >= guessers * 3 ? 40 : 0;
+}
+
 export function attachMultiplayer(server) {
   // shortcut: rooms disappear on restart; use shared storage when persistence is needed.
   const rooms = new Map();
@@ -44,6 +50,10 @@ export function attachMultiplayer(server) {
   function endTurn(room) {
     clearTimeout(room.clock);
     const state = room.state;
+    if (state.status === 'playing' && state.word && !state.choosing) {
+      const drawer = state.players.find((p) => p.id === state.drawer);
+      if (drawer) drawer.score += drawerPoints(room.correct.size, state.players.length - 1);
+    }
     state.status = 'leaderboard'; state.choosing = false; state.choices = [];
     state.endsAt = Date.now() + 5000;
     state.leaderboard = [...state.players].sort((a, b) => b.score - a.score).map((p) => ({ ...p, gained: p.score - (room.scoresAtStart?.[p.id] || 0) }));

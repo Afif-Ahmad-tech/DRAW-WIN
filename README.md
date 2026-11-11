@@ -25,7 +25,7 @@
 
 - 🎨 **One shared canvas** — every stroke streams to all players over WebSockets.
 - ⏱️ **60-second turns** — letters reveal themselves as the clock runs down (30s, 15s and 5s left).
-- 🏆 **Live scoring** — a correct guess starts at 80 points, drops 1 per second after 10s, and 1 per wrong guess, with a floor of 15.
+- 🏆 **Live scoring** — a correct guess starts at 80 points, drops 1 per second after 10s, and 1 per wrong guess, with a floor of 15. Drawers also score: 40 when at least 30% of the other players guess correctly, 80 when everyone does, 0 otherwise.
 - 🔁 **Everyone draws** — 2–5 rounds, 2–5 word choices per turn, 2–10 players.
 - 🎚️ **Host-picked difficulty** — Easy, Medium, Hard or Difficult word banks, each dealt without repeats until it runs out.
 - 🔎 **"Close!" hints** — near-miss spellings get a private nudge, but only the exact word scores.
@@ -40,7 +40,7 @@
 3. **Start** — the host can start once at least 2 players are in.
 4. **Draw** — the drawer picks one of the offered words and sketches it for 60 seconds.
 5. **Guess** — everyone else types guesses; correct guesses score instantly, and the turn ends early once every guesser has it.
-6. **Next turn** — a 5-second leaderboard runs, then the next player draws. After the final round the leaderboard stays put.
+6. **Next turn** — a 5-second leaderboard runs, the drawer banks their bonus, then the next player draws. After the final round the leaderboard stays put.
 7. **Dropped?** — reconnect with the same invite link within 60 seconds and you keep your seat.
 
 </details>
@@ -57,6 +57,14 @@ points = max(15, 80 − max(0, seconds − 10) − wrong_guesses)
 - ❌ **Wrong guesses** — 1 point lost each, for the rest of that turn.
 - 🛟 **Floor** — a correct guess never drops below 15.
 - 🫥 **Missed it** — no correct guess before the buzzer means 0 for that turn.
+
+Drawers are scored separately at the end of the turn:
+
+```text
+guessed correctly: 0 → 0 points, >= 30% → 40 points, all → 80 points
+```
+
+The 30% check counts every player except the drawer: with 9 guessers, 3 or more (33%) earns the 40-point bonus, while 2 (22%) does not. 80 is reserved for the case where every guesser gets it.
 
 </details>
 
@@ -91,7 +99,7 @@ Run the test suite:
 node --test
 ```
 
-Six tests cover join/reconnect/draw/guess flow, timed turns and leaderboards, the word pool, difficulty banks, and close-guess matching.
+Seven tests cover join/reconnect/draw/guess flow, timed turns and leaderboards, drawer point thresholds, the word pool, difficulty banks, and close-guess matching.
 
 </details>
 
