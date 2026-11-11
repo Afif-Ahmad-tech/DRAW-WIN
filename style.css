@@ -98,3 +98,22 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:pan-
   .setting-field{margin:5px 0}
   #host-settings p{margin:4px 0}
 }
+@media(max-width:760px),(pointer:coarse){
+  html,body{height:auto;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:auto}
+  .shell{height:auto;min-height:100dvh;display:block}
+  .home{min-height:calc(100dvh - 68px);overflow:visible;padding:24px 4%}
+  .room{display:block;height:auto}
+  .lobby-card{grid-template-rows:auto auto}
+  .lobby-main,.lobby-side{overflow:visible}
+  .game{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto}
+  .game-main{grid-template-rows:auto auto auto}
+  .board-wrap{height:clamp(240px,65vw,440px)}
+  .game-bar{flex-wrap:wrap}
+  .word{max-width:100%;overflow-wrap:anywhere}
+  .game-side{display:flex;min-height:420px;overflow:visible}
+  .scoreboard{max-height:none;overflow:visible}
+  .chat{min-height:280px;overflow:visible;border-left:0;border-top:1px solid var(--line);padding:15px 0 0}
+  .messages{max-height:250px;overflow:auto}
+  .turn-results{min-height:300px}
+  #leaderboard{flex:none;overflow:visible}
+}
