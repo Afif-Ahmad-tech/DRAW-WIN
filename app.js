@@ -150,7 +150,7 @@ function render() {
   $('drawing-tools').classList.toggle('hidden', !drawingTurn);
   $('guess-dock').classList.toggle('hidden', drawingTurn);
   $('clear').disabled = !drawingTurn || state.choosing || state.guessed;
-  $('board-hint').textContent = drawingTurn ? 'Draw a clue for everyone' : '';
+  $('board-hint').textContent = drawingTurn && !state.strokes.length ? 'Draw a clue for everyone' : '';
   $('board').style.pointerEvents = drawingTurn && !state.choosing && !state.guessed ? 'auto' : 'none';
   $('guess').disabled = drawingTurn || state.choosing || state.guessed;
   $('guess').maxLength = state.mask?.length || 80;
@@ -180,7 +180,7 @@ function drawStroke(stroke, send=true) {
   if (send && channel?.readyState !== WebSocket.OPEN) return;
   const ctx=$('board').getContext('2d'), w=$('board').clientWidth, h=$('board').clientHeight;
   ctx.strokeStyle=stroke.colour || '#283026'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.beginPath(); ctx.moveTo(stroke.a.x*w,stroke.a.y*h); ctx.lineTo(stroke.b.x*w,stroke.b.y*h); ctx.stroke();
-  if (send) { state.strokes.push(stroke); channel.send(JSON.stringify({type:'stroke',stroke})); }
+  if (send) { state.strokes.push(stroke); $('board-hint').textContent = ''; channel.send(JSON.stringify({type:'stroke',stroke})); }
 }
 function redraw() { clearBoard(); for (const stroke of (state?.strokes || [])) drawStroke(stroke,false); }
 function clearBoard() { const c=$('board'); c.getContext('2d').clearRect(0,0,c.width,c.height); }
