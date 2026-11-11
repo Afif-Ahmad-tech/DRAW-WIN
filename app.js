@@ -23,9 +23,9 @@ function joinRoom() {
   room = $('room-code').value.trim().toUpperCase();
   state = loadRoom(room);
   if (!state) return showError('That room code was not found.');
+  if (state.players.some((p) => p.id === me)) return enterRoom();
   if (state.status !== 'lobby') return showError('This game has already started.');
   if (state.players.length >= 10) return showError('This room is full (10 players max).');
-  if (state.players.some((p) => p.id === me)) return enterRoom();
   state.players.push({ id: me, name: getName(), score: 0 });
   enterRoom();
   save();
@@ -56,6 +56,8 @@ function nextTurn() {
 }
 function leaveRoom() {
   if (state) {
+    const index = state.players.findIndex((player) => player.id === me);
+    if (state.status === 'playing' && index >= 0 && index < state.round) state.round--;
     state.players = state.players.filter((player) => player.id !== me);
     if (state.host === me) state.host = state.players[0]?.id;
     if (!state.players.length) localStorage.removeItem(`drawwin:${room}`);
