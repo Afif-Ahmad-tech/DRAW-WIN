@@ -2,7 +2,7 @@
 
 `words.txt` contains 3,000 unique lowercase English words, bundled locally so gameplay does not need an external word API.
 
-The list combines the original eight game words with concrete noun candidates from WordNet 3.0, ranked using the English 2018 frequency list from Hermit Dave's FrequencyWords project. The selection uses primary noun senses for animals, objects, food, plants, locations, body parts, shapes, materials and natural phenomena. Capitalized names, punctuation, words outside 4–14 letters, and selected unsuitable or ambiguous terms were excluded. The final list was deduplicated and sorted.
+The list contains concrete, drawable objects: manufactured items and buildings, plus selected food and natural objects. Candidates came from WordNet 3.0's physical artifact noun senses and were ranked using the English 2018 frequency list from Hermit Dave's FrequencyWords project. Familiar food, artwork and natural objects were added by hand. Abstract terms, actions, living creatures, non-object locations, ambiguous senses, capitalized names, punctuation, and words outside 3–14 letters were excluded. The final list was deduplicated and sorted.
 
 Sources retrieved November 11, 2026:
 

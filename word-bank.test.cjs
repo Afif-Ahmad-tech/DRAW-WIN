@@ -1,11 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-test('library contains 3000 unique words and options do not repeat before exhaustion', async () => {
+test('library contains 3000 distinct object names and options do not repeat before exhaustion', async () => {
   const { words, drawWords } = await import('./word-bank.mjs');
   assert.equal(words.length, 3000);
   assert.equal(new Set(words).size, 3000);
-  assert.ok(words.every((word) => /^[a-z]{4,14}$/.test(word)));
+  assert.ok(words.every((word) => /^[a-z]{3,14}$/.test(word)));
+  for (const word of ['car', 'cup', 'book', 'pizza', 'watermelon', 'guitar', 'castle']) assert.ok(words.includes(word), word);
+  for (const word of ['affinity', 'gravity', 'weather', 'voltage', 'architecture', 'website', 'octopus', 'butterfly', 'volcano', 'room', 'road', 'zoo']) assert.ok(!words.includes(word), word);
   const pool = [], seen = new Set();
   for (let turn = 0; turn < 600; turn++) {
     for (const word of drawWords(pool, 5)) {
