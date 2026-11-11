@@ -20,7 +20,7 @@ function connect(type, retry = false) {
   const code = retry ? room || sessionStorage.activeRoom || $('room-code').value.trim().toUpperCase() : $('room-code').value.trim().toUpperCase();
   if (type === 'join' && !/^[A-Z0-9]{5}$/.test(code)) return showError('Enter a five-character room code.');
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const endpoint = location.hostname.endsWith('.vercel.app') ? 'wss://draw-win.onrender.com' : `${protocol}//${location.host}`;
+  const endpoint = `${protocol}//${location.host}`;
   const socket = channel = new WebSocket(endpoint);
   connectionStatus(retry ? 'Reconnecting…' : 'Connecting…');
   $('create').disabled = $('join').disabled = true;

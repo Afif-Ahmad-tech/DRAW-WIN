@@ -2,6 +2,8 @@
 
 A draw-and-guess game for 2–10 players.
 
+Play online at <https://draw-win.onrender.com>. The Render service hosts both the website and the shared game server.
+
 ## Run locally
 
 ```sh
