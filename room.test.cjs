@@ -16,9 +16,11 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   t.after(() => { for (const socket of sockets) socket.terminate(); wss.close(); server.close(); });
   async function client() {
     const socket = new WebSocket(url), queue = [], waiters = [];
+    let latestState;
     sockets.push(socket);
     socket.on('message', (data) => {
       const message = JSON.parse(data);
+      if (message.state) latestState = message.state;
       const index = waiters.findIndex((entry) => entry.predicate(message));
       if (index >= 0) waiters.splice(index, 1)[0].resolve(message);
       else queue.push(message);
@@ -26,6 +28,7 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
     await once(socket, 'open');
     return {
       close: () => socket.close(),
+      state: () => latestState,
       send: (message) => socket.send(JSON.stringify(message)),
       next: (predicate) => {
         const index = queue.findIndex(predicate);
@@ -50,6 +53,7 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   a.send({ type: 'settings', rounds: 5, choices: 5 });
   await b.next((m) => m.type === 'state' && m.state.settings.rounds === 5);
   a.send({ type: 'settings', rounds: 6, choices: 1 });
+  t.mock.timers.enable({ apis: ['Date'], now: 100000 });
   a.send({ type: 'start' });
   const playing = await b.next((m) => m.type === 'state' && m.state.status === 'playing');
   assert.equal(playing.state.drawer, ids[0]);
@@ -85,25 +89,25 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   assert.equal(close.close, true);
   b.send({ type: 'guess', text: options[0] });
   assert.equal((await b.next((m) => m.type === 'guess-result')).correct, true);
-  assert.equal((await c.next((m) => m.type === 'state' && m.state.guessed)).state.players[1].score, 1);
+  const results = await c.next((m) => m.type === 'state' && m.state.status === 'leaderboard');
+  assert.equal(results.state.players[1].score, 1);
+  assert.equal(results.state.leaderboard[0].id, ids[1]);
+  assert.equal(results.state.leaderboard[0].gained, 1);
+  assert.equal(results.state.endsAt, Date.now() + 5000);
   a.send({ type: 'leave' });
+  await b.next((m) => m.type === 'state' && m.state.status === 'leaderboard' && m.state.players.length === 2);
+  t.mock.timers.tick(5000);
   const next = await b.next((m) => m.type === 'state' && m.state.drawer === ids[1]);
   assert.equal(next.state.round, 1);
   const shown = new Set(options);
   for (const word of next.state.choices) { assert.equal(shown.has(word), false); shown.add(word); }
-  for (let round = 1; round <= 5; round++) {
-    for (const drawer of round === 1 ? [ids[2]] : [ids[1], ids[2]]) {
-      b.send({ type: 'next' });
-      const turn = await b.next((m) => m.type === 'state' && m.state.round === round && m.state.drawer === drawer);
-      assert.equal(turn.state.round, round);
-      for (const word of turn.state.choices) { assert.equal(shown.has(word), false); shown.add(word); }
-    }
-  }
   b.send({ type: 'next' });
-  await b.next((m) => m.type === 'state' && m.state.status === 'finished');
+  b.send({ type: 'ping' });
+  await b.next((m) => m.type === 'pong');
+  assert.equal(b.state().turn, 2, 'manual next commands are ignored');
 });
 
-test('turns reveal three letters on schedule and advance automatically', { timeout: 12000 }, async (t) => {
+test('timed turns show a five-second leaderboard before automatic handoff and final results', { timeout: 20000 }, async (t) => {
   const { attachMultiplayer } = await import('./multiplayer.mjs');
   const server = createServer(), wss = attachMultiplayer(server), sockets = [];
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
@@ -142,12 +146,28 @@ test('turns reveal three letters on schedule and advance automatically', { timeo
     assert.equal(clue.state.turn, 1);
   }
   t.mock.timers.tick(5000);
-  const second = await guest.next((m) => m.type === 'state' && m.state.turn === 2);
+  const timeoutResults = await guest.next((m) => m.type === 'state' && m.state.status === 'leaderboard');
+  assert.equal(timeoutResults.state.endsAt, 165000);
+  assert.equal(timeoutResults.state.word, choosing.state.choices[0]);
+  const reconnect = await connect();
+  reconnect.send({ type: 'join', code: created.state.code, id: guestId, name: 'Guest' });
+  const restored = await reconnect.next((m) => m.type === 'joined');
+  assert.equal(restored.state.status, 'leaderboard');
+  assert.equal(restored.state.endsAt, 165000);
+  t.mock.timers.tick(5000);
+  const second = await reconnect.next((m) => m.type === 'state' && m.state.turn === 2);
   assert.equal(second.state.drawer, guestId);
-  guest.send({ type: 'choose', word: second.state.choices[0] });
+  reconnect.send({ type: 'choose', word: second.state.choices[0] });
   await host.next((m) => m.type === 'state' && m.state.turn === 2 && !m.state.choosing);
   host.send({ type: 'guess', text: second.state.choices[0] });
-  await guest.next((m) => m.type === 'state' && m.state.guessed);
-  t.mock.timers.tick(3000);
+  const correctResults = await reconnect.next((m) => m.type === 'state' && m.state.turn === 2 && m.state.status === 'leaderboard');
+  assert.equal(correctResults.state.endsAt, Date.now() + 5000);
+  t.mock.timers.tick(5000);
   await host.next((m) => m.type === 'state' && m.state.turn === 3);
+  for (const turn of [3, 4]) {
+    t.mock.timers.tick(60000);
+    await host.next((m) => m.type === 'state' && m.state.turn === turn && m.state.status === 'leaderboard');
+    t.mock.timers.tick(5000);
+    await host.next((m) => m.type === 'state' && (turn === 4 ? m.state.status === 'finished' : m.state.turn === 4 && m.state.status === 'playing'));
+  }
 });

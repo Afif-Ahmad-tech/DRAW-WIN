@@ -114,15 +114,21 @@ function render() {
   $('start').disabled = me !== state.host || state.players.length < 2;
   $('start').textContent = me === state.host ? (state.players.length < 2 ? 'Waiting for players…' : 'Start game ↗') : 'Waiting for host…';
   $('lobby-status').textContent = state.players.length < 2 ? 'Waiting for players…' : 'Room is ready';
-  $('lobby').classList.toggle('hidden', state.status !== 'lobby'); $('game').classList.toggle('hidden', state.status === 'lobby');
+  const results = ['leaderboard', 'finished'].includes(state.status);
+  $('lobby').classList.toggle('hidden', state.status !== 'lobby');
+  $('game').classList.toggle('hidden', state.status !== 'playing');
+  $('turn-results').classList.toggle('hidden', !results);
   if (state.status === 'lobby') return;
   $('game-count').textContent = `${state.players.length}/10`;
   $('scoreboard').innerHTML = [...state.players].sort((a,b)=>b.score-a.score).map((p)=>`<div class="score-row"><span class="avatar">${escapeHtml(p.name[0].toUpperCase())}</span>${escapeHtml(p.name)}<span class="score">${p.score}</span></div>`).join('');
   $('word-choices').classList.add('hidden');
-  if (state.status === 'finished') {
-    $('colours').classList.add('hidden'); $('clear').disabled = true;
-    $('turn-label').textContent = 'GAME OVER'; $('game-prompt').textContent = `${[...state.players].sort((a,b)=>b.score-a.score)[0].name} wins!`;
-    $('word').textContent = ''; $('next').classList.add('hidden'); $('board-hint').textContent = 'Nice game!'; return;
+  if (results) {
+    const standings = state.leaderboard || [];
+    $('results-title').textContent = state.status === 'finished' ? 'Final leaderboard' : 'Turn complete';
+    const ownResult = standings.find((p) => p.id === me);
+    $('results-summary').textContent = state.status === 'finished' ? `${standings[0]?.name || 'Player'} wins!` : (ownResult?.gained > 0 ? 'You guessed right! ' : '') + (state.word ? `The word was ${state.word}.` : 'No word was selected.');
+    $('leaderboard').innerHTML = standings.map((p, index) => `<li class="leaderboard-row"><span class="rank">${index + 1}</span><span class="leaderboard-name">${escapeHtml(p.name)}${p.id === me ? ' (you)' : ''}</span><span class="turn-gain">+${p.gained} this turn</span><strong>${p.score} pts</strong></li>`).join('');
+    return;
   }
   const drawingTurn = state.drawer === me;
   const drawer = state.players.find((p)=>p.id===state.drawer);
@@ -143,7 +149,6 @@ function render() {
   $('guess').disabled = drawingTurn || state.choosing || state.guessed;
   $('guess').maxLength = state.mask?.length || 80;
   $('guess').placeholder = drawingTurn ? 'You are drawing…' : state.guessed ? 'Round complete' : 'Type your guess…';
-  $('next').classList.toggle('hidden', me !== state.host);
   previewGuess();
   redraw();
 }
@@ -160,6 +165,7 @@ function previewGuess() {
 }
 setInterval(() => {
   $('turn-timer').textContent = state?.status === 'playing' && state.endsAt ? Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)) + 's' : '';
+  $('results-countdown').textContent = state?.status === 'leaderboard' ? 'Continuing in ' + Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)) + ' seconds…' : '';
 }, 250);
 function escapeHtml(value) { return value.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function point(event) { const r=$('board').getBoundingClientRect(); return { x:(event.clientX-r.left)/r.width, y:(event.clientY-r.top)/r.height }; }
@@ -186,7 +192,6 @@ for (const [name, colour] of colours) {
   };
   $('colours').append(button);
 }
-$('next').onclick = () => send({ type: 'next' });
 $('leave').onclick = leaveRoom;
 $('room-code').oninput = (e) => { e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); };
 $('board').onpointerdown = (e) => { if (!state || channel?.readyState !== WebSocket.OPEN || state.status!=='playing' || state.drawer!==me || state.choosing || state.guessed) return; drawing=true; lastPoint=point(e); $('board').setPointerCapture(e.pointerId); };

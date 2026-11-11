@@ -16,7 +16,7 @@ export function attachMultiplayer(server) {
   };
   const view = (room, id) => ({
     ...room.state,
-    word: id === room.state.drawer || room.state.guessed ? room.state.word : '',
+    word: id === room.state.drawer || room.state.guessed || room.state.status === 'leaderboard' ? room.state.word : '',
     mask: [...(room.state.word || '')].map((letter, index) => room.revealed.has(index) ? letter : /[a-z]/i.test(letter) ? '_' : letter).join(''),
     choices: id === room.state.drawer ? room.state.choices : []
   });
@@ -24,10 +24,10 @@ export function attachMultiplayer(server) {
     for (const [id, socket] of room.clients) send(socket, { type: 'state', state: view(room, id) });
   };
   function tick(room) {
-    if (room.state.status !== 'playing') return;
+    if (!['playing', 'leaderboard'].includes(room.state.status)) return;
     const remaining = room.state.endsAt - Date.now();
-    if (remaining <= 0) return nextTurn(room);
-    if (room.state.word && !room.state.guessed) {
+    if (remaining <= 0) return room.state.status === 'leaderboard' ? nextTurn(room) : endTurn(room);
+    if (room.state.status === 'playing' && room.state.word && !room.state.guessed) {
       const count = remaining <= 5000 ? 3 : remaining <= 15000 ? 2 : remaining <= 30000 ? 1 : 0;
       let changed = false;
       while (room.revealed.size < Math.min(count, room.state.word.length)) {
@@ -38,6 +38,14 @@ export function attachMultiplayer(server) {
     }
     room.clock = setTimeout(() => tick(room), Math.min(1000, remaining));
     room.clock.unref();
+  }
+  function endTurn(room) {
+    clearTimeout(room.clock);
+    const state = room.state;
+    state.status = 'leaderboard'; state.choosing = false; state.choices = [];
+    state.endsAt = Date.now() + 5000;
+    state.leaderboard = [...state.players].sort((a, b) => b.score - a.score).map((p) => ({ ...p, gained: p.score - (room.scoresAtStart?.[p.id] || 0) }));
+    sync(room); tick(room);
   }
   function nextTurn(room) {
     clearTimeout(room.clock);
@@ -50,6 +58,9 @@ export function attachMultiplayer(server) {
       state.endsAt = null;
       state.status = 'finished'; state.drawer = null; state.choices = []; state.choosing = false;
     } else {
+      state.status = 'playing';
+      room.scoresAtStart = Object.fromEntries(state.players.map((p) => [p.id, p.score]));
+      state.leaderboard = [];
       state.endsAt = Date.now() + 60000;
       state.round = next.round; state.drawer = next.id;
       state.choices = drawWords(room.wordPool, state.settings.choices);
@@ -67,7 +78,7 @@ export function attachMultiplayer(server) {
     room.clients.delete(id);
     if (!state.players.length) { clearTimeout(room.clock); rooms.delete(state.code); return; }
     if (state.host === id) state.host = state.players[0].id;
-    if (state.status === 'playing' && state.drawer === id) nextTurn(room);
+    if (state.status === 'playing' && state.drawer === id) endTurn(room);
     else sync(room);
   }
   wss.on('connection', (socket) => {
@@ -108,15 +119,17 @@ export function attachMultiplayer(server) {
       if (!room || room.clients.get(id) !== socket) return;
       const state = room.state;
       if (message.type === 'leave') { removePlayer(room, id); room = null; return; }
-      if (state.status === 'playing' && Date.now() >= state.endsAt) { nextTurn(room); return; }
+      if (['playing', 'leaderboard'].includes(state.status) && Date.now() >= state.endsAt) {
+        if (state.status === 'leaderboard') nextTurn(room); else endTurn(room);
+        return;
+      }
       if (message.type === 'settings' && id === state.host && state.status === 'lobby') {
         if (!Number.isInteger(message.rounds) || message.rounds < 2 || message.rounds > 5 || !Number.isInteger(message.choices) || message.choices < 2 || message.choices > 5) return;
         state.settings = { rounds: message.rounds, choices: message.choices }; sync(room);
       } else if (message.type === 'start' && id === state.host && state.status === 'lobby' && state.players.length >= 2) {
         room.turns = Array.from({ length: state.settings.rounds }, (_, round) => state.players.map((p) => ({ id: p.id, round: round + 1 }))).flat();
         state.status = 'playing'; state.round = 0; state.turn = 0; nextTurn(room);
-      } else if (message.type === 'next' && id === state.host && state.status === 'playing') nextTurn(room);
-      else if (message.type === 'choose' && id === state.drawer && state.status === 'playing' && state.choosing && state.choices.includes(message.word)) {
+      } else if (message.type === 'choose' && id === state.drawer && state.status === 'playing' && state.choosing && state.choices.includes(message.word)) {
         state.word = message.word; state.choices = []; state.choosing = false; sync(room);
       }
       else if (message.type === 'clear' && id === state.drawer && state.status === 'playing' && !state.guessed) { state.strokes = []; sync(room); }
@@ -134,9 +147,8 @@ export function attachMultiplayer(server) {
         send(socket, { type: 'guess-result', turn: state.turn, correct: text.toLowerCase() === state.word.toLowerCase(), close: isCloseGuess(text, state.word), guess: text });
         if (text.toLowerCase() === state.word.toLowerCase()) {
           state.guessed = true; player.score++;
-          state.endsAt = Date.now() + 3000;
           broadcast(room, { type: 'message', name: player.name, text: 'guessed the word!', correct: true });
-          sync(room);
+          endTurn(room);
         } else broadcast(room, { type: 'message', name: player.name, text });
       }
     });
