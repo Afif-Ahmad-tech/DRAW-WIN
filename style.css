@@ -64,3 +64,22 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:pan-
   .game-side{padding:8px;min-height:0}
   .game-bar{min-height:26px;margin-bottom:4px}
 }
+.setting-field{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:12px 0;font-size:14px}
+.setting-field select{font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:7px;background:var(--paper);color:var(--ink)}
+#host-settings{width:100%}
+#host-settings h2{margin:0}
+#host-settings p{font-size:13px;color:var(--muted)}
+.word-choices{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;background:var(--paper);padding:12px;overflow:auto}
+.word-choices h2{font-size:18px;margin:0 0 12px}
+#word-options{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
+.tools{flex-wrap:wrap;gap:8px}
+.colours{display:flex;gap:4px}
+.colour-swatch{width:32px;height:32px;border:3px solid var(--paper);border-radius:50%;cursor:pointer}
+.colour-swatch[aria-pressed=true]{outline:2px solid var(--ink);outline-offset:1px}
+.colour-swatch:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.tools:has(.colours:not(.hidden)) #tool-hint{display:none}
+@media(max-height:450px){
+  .lobby-side{padding:12px}
+  .setting-field{margin:5px 0}
+  #host-settings p{margin:4px 0}
+}

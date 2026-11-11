@@ -1,6 +1,8 @@
 const $ = (id) => document.getElementById(id);
 const me = sessionStorage.playerId || (sessionStorage.playerId = crypto.randomUUID());
 let room, channel, drawing = false, lastPoint, state;
+let selectedColour = '#283026';
+const colours = [['Black', '#283026'], ['Red', '#e53935'], ['Orange', '#f28c28'], ['Yellow', '#f5c518'], ['Green', '#43a047'], ['Blue', '#1e88e5'], ['Purple', '#8e44ad']];
 
 function showError(message) { $('error').textContent = message; }
 function getName() { return $('name').value.trim() || 'Player'; }
@@ -24,9 +26,9 @@ function connect(type) {
       history.replaceState(null, '', `?room=${room}`);
       render();
     } else if (message.type === 'state') {
-      const oldRound = state?.round, oldStatus = state?.status;
+      const oldRound = state?.turn, oldStatus = state?.status;
       state = message.state;
-      if (oldRound !== state.round || oldStatus !== state.status) $('messages').replaceChildren();
+      if (oldRound !== state.turn || oldStatus !== state.status) { drawing = false; $('messages').replaceChildren(); }
       render();
     } else if (message.type === 'stroke' && state && message.sender !== me) {
       state.strokes.push(message.stroke); drawStroke(message.stroke, false);
@@ -50,6 +52,12 @@ function render() {
   if (!state) return;
   $('room-title').innerHTML = `Room <span>${room}</span>`;
   $('code-display').textContent = room;
+  const settings = state.settings || { rounds: 2, choices: 2 };
+  $('host-settings').classList.toggle('hidden', me !== state.host);
+  $('settings-summary').classList.toggle('hidden', me === state.host);
+  $('rounds').value = settings.rounds;
+  $('choices-count').value = settings.choices;
+  $('settings-summary').textContent = settings.rounds + ' rounds, ' + settings.choices + ' word choices per turn';
   $('players').innerHTML = state.players.map((p) => `<div class="player"><span class="avatar">${escapeHtml(p.name[0].toUpperCase())}</span>${escapeHtml(p.name)}${p.id === state.host ? '<span class="host-tag">HOST</span>' : ''}</div>`).join('');
   $('start').disabled = me !== state.host || state.players.length < 2;
   $('start').textContent = me === state.host ? (state.players.length < 2 ? 'Waiting for players…' : 'Start game ↗') : 'Waiting for host…';
@@ -58,18 +66,29 @@ function render() {
   if (state.status === 'lobby') return;
   $('game-count').textContent = `${state.players.length}/10`;
   $('scoreboard').innerHTML = [...state.players].sort((a,b)=>b.score-a.score).map((p)=>`<div class="score-row"><span class="avatar">${escapeHtml(p.name[0].toUpperCase())}</span>${escapeHtml(p.name)}<span class="score">${p.score}</span></div>`).join('');
+  $('word-choices').classList.add('hidden');
   if (state.status === 'finished') {
+    $('colours').classList.add('hidden'); $('clear').disabled = true;
     $('turn-label').textContent = 'GAME OVER'; $('game-prompt').textContent = `${[...state.players].sort((a,b)=>b.score-a.score)[0].name} wins!`;
     $('word').textContent = ''; $('next').classList.add('hidden'); $('board-hint').textContent = 'Nice game!'; return;
   }
   const drawingTurn = state.drawer === me;
   const drawer = state.players.find((p)=>p.id===state.drawer);
-  $('turn-label').textContent = `ROUND ${state.round} / ${state.players.length}`;
+  $('turn-label').textContent = `ROUND ${state.round} / ${settings.rounds}`;
   $('game-prompt').textContent = state.guessed ? `${drawer.name} drew ${state.word}` : drawingTurn ? 'Your turn to draw!' : `${drawer.name} is drawing…`;
-  $('word').textContent = drawingTurn && !state.guessed ? state.word.toUpperCase() : state.guessed ? '' : '• • • • •';
+  $('word').textContent = state.choosing ? '' : drawingTurn && !state.guessed ? state.word.toUpperCase() : state.guessed ? '' : (state.mask || state.word.replace(/[a-z]/gi, '_')).split('').join(' ');
+  if (state.choosing) $('game-prompt').textContent = drawingTurn ? 'Choose a word to draw' : `${drawer.name} is choosing a word…`;
+  $('word-choices').classList.toggle('hidden', !drawingTurn || !state.choosing);
+  $('word-options').replaceChildren();
+  for (const word of state.choices || []) {
+    const button = document.createElement('button'); button.className = 'secondary'; button.textContent = word;
+    button.onclick = () => send({ type: 'choose', word }); $('word-options').append(button);
+  }
+  $('colours').classList.toggle('hidden', !drawingTurn);
+  $('clear').disabled = !drawingTurn || state.choosing || state.guessed;
   $('board-hint').textContent = drawingTurn ? 'Draw a clue for everyone' : '';
-  $('board').style.pointerEvents = drawingTurn && !state.guessed ? 'auto' : 'none';
-  $('guess').disabled = drawingTurn || state.guessed;
+  $('board').style.pointerEvents = drawingTurn && !state.choosing && !state.guessed ? 'auto' : 'none';
+  $('guess').disabled = drawingTurn || state.choosing || state.guessed;
   $('guess').placeholder = drawingTurn ? 'You are drawing…' : state.guessed ? 'Round complete' : 'Type your guess…';
   $('next').classList.toggle('hidden', me !== state.host);
   redraw();
@@ -78,7 +97,7 @@ function escapeHtml(value) { return value.replace(/[&<>"']/g, (c) => ({'&':'&amp
 function point(event) { const r=$('board').getBoundingClientRect(); return { x:(event.clientX-r.left)/r.width, y:(event.clientY-r.top)/r.height }; }
 function drawStroke(stroke, send=true) {
   const ctx=$('board').getContext('2d'), w=$('board').clientWidth, h=$('board').clientHeight;
-  ctx.strokeStyle='#283026'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.beginPath(); ctx.moveTo(stroke.a.x*w,stroke.a.y*h); ctx.lineTo(stroke.b.x*w,stroke.b.y*h); ctx.stroke();
+  ctx.strokeStyle=stroke.colour || '#283026'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.beginPath(); ctx.moveTo(stroke.a.x*w,stroke.a.y*h); ctx.lineTo(stroke.b.x*w,stroke.b.y*h); ctx.stroke();
   if (send) { state.strokes.push(stroke); channel.send(JSON.stringify({type:'stroke',stroke})); }
 }
 function redraw() { clearBoard(); for (const stroke of (state?.strokes || [])) drawStroke(stroke,false); }
@@ -88,11 +107,21 @@ function addMessage(name, text, correct=false) { const div=document.createElemen
 $('create').onclick = () => { showError(''); connect('create'); };
 $('join').onclick = () => { showError(''); connect('join'); };
 $('start').onclick = () => send({ type: 'start' });
+for (const id of ['rounds', 'choices-count']) $(id).onchange = () => send({ type: 'settings', rounds: Number($('rounds').value), choices: Number($('choices-count').value) });
+for (const [name, colour] of colours) {
+  const button = document.createElement('button'); button.className = 'colour-swatch'; button.style.backgroundColor = colour;
+  button.setAttribute('aria-label', name); button.setAttribute('aria-pressed', String(colour === selectedColour));
+  button.onclick = () => {
+    selectedColour = colour;
+    for (const swatch of $('colours').children) swatch.setAttribute('aria-pressed', String(swatch === button));
+  };
+  $('colours').append(button);
+}
 $('next').onclick = () => send({ type: 'next' });
 $('leave').onclick = leaveRoom;
 $('room-code').oninput = (e) => { e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); };
-$('board').onpointerdown = (e) => { if (!state || state.drawer!==me || state.guessed) return; drawing=true; lastPoint=point(e); $('board').setPointerCapture(e.pointerId); };
-$('board').onpointermove = (e) => { if (!drawing) return; const next=point(e); drawStroke({a:lastPoint,b:next}); lastPoint=next; };
+$('board').onpointerdown = (e) => { if (!state || state.status!=='playing' || state.drawer!==me || state.choosing || state.guessed) return; drawing=true; lastPoint=point(e); $('board').setPointerCapture(e.pointerId); };
+$('board').onpointermove = (e) => { if (!drawing) return; const next=point(e); drawStroke({a:lastPoint,b:next,colour:selectedColour}); lastPoint=next; };
 $('board').onpointerup = () => { drawing=false; };
 $('clear').onclick = () => send({ type: 'clear' });
 $('guess-form').onsubmit = (e) => {

@@ -38,25 +38,51 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   const ids = [randomUUID(), randomUUID(), randomUUID()];
   a.send({ type: 'create', id: ids[0], name: 'A' });
   const created = await a.next((m) => m.type === 'joined');
+  assert.deepEqual(created.state.settings, { rounds: 2, choices: 2 });
   for (const [client, id, name] of [[b, ids[1], 'B'], [c, ids[2], 'C']]) {
     client.send({ type: 'join', code: created.state.code, id, name });
     await client.next((m) => m.type === 'joined');
   }
   await a.next((m) => m.type === 'state' && m.state.players.length === 3);
+  b.send({ type: 'settings', rounds: 3, choices: 3 });
+  a.send({ type: 'settings', rounds: 5, choices: 5 });
+  await b.next((m) => m.type === 'state' && m.state.settings.rounds === 5);
+  a.send({ type: 'settings', rounds: 6, choices: 1 });
   a.send({ type: 'start' });
   const playing = await b.next((m) => m.type === 'state' && m.state.status === 'playing');
   assert.equal(playing.state.drawer, ids[0]);
+  assert.equal(playing.state.word, '');
+  assert.deepEqual(playing.state.choices, []);
+  assert.deepEqual(playing.state.settings, { rounds: 5, choices: 5 });
+  const options = (await a.next((m) => m.type === 'state' && m.state.choosing)).state.choices;
+  assert.equal(options.length, 5);
+  assert.equal(new Set(options).size, 5);
+  a.send({ type: 'choose', word: options[0] });
+  const ready = await b.next((m) => m.type === 'state' && m.state.mask.length > 0);
+  assert.equal(ready.state.mask, '_'.repeat(options[0].length));
+  assert.equal(ready.state.word, '');
   a.close();
   a = await client();
   a.send({ type: 'join', code: created.state.code, id: ids[0], name: 'A' });
   const rejoined = await a.next((m) => m.type === 'joined');
   assert.equal(rejoined.state.status, 'playing');
   assert.equal(rejoined.state.players.length, 3);
-  a.send({ type: 'stroke', stroke: { a: { x: 0.1, y: 0.2 }, b: { x: 0.3, y: 0.4 } } });
-  assert.equal((await b.next((m) => m.type === 'stroke')).sender, ids[0]);
-  b.send({ type: 'guess', text: playing.state.word });
+  a.send({ type: 'stroke', stroke: { a: { x: 0.1, y: 0.2 }, b: { x: 0.3, y: 0.4 }, colour: '#1e88e5' } });
+  const stroke = await b.next((m) => m.type === 'stroke');
+  assert.equal(stroke.sender, ids[0]);
+  assert.equal(stroke.stroke.colour, '#1e88e5');
+  b.send({ type: 'guess', text: options[0] });
   assert.equal((await c.next((m) => m.type === 'state' && m.state.guessed)).state.players[1].score, 1);
   a.send({ type: 'leave' });
   const next = await b.next((m) => m.type === 'state' && m.state.drawer === ids[1]);
   assert.equal(next.state.round, 1);
+  for (let round = 1; round <= 5; round++) {
+    for (const drawer of round === 1 ? [ids[2]] : [ids[1], ids[2]]) {
+      b.send({ type: 'next' });
+      const turn = await b.next((m) => m.type === 'state' && m.state.round === round && m.state.drawer === drawer);
+      assert.equal(turn.state.round, round);
+    }
+  }
+  b.send({ type: 'next' });
+  await b.next((m) => m.type === 'state' && m.state.status === 'finished');
 });
