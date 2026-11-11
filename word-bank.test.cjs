@@ -26,3 +26,24 @@ test('close guesses cover small spelling errors without accepting unrelated gues
   for (const guess of ['castl', 'castlee', 'casxle', 'catsle', ' CastleX ']) assert.equal(isCloseGuess(guess, 'castle'), true, guess);
   for (const guess of ['castle', 'CASTLE', 'car', 'banana', '', 'c', 'castlers']) assert.equal(isCloseGuess(guess, 'castle'), false, guess);
 });
+
+test('difficulty banks are trimmed, duplicate-free and keep their curated spelling', async () => {
+  const { difficultyWords } = await import('./difficulty-words.mjs');
+  assert.deepEqual(Object.keys(difficultyWords), ['easy', 'medium', 'hard', 'difficult']);
+  for (const [name, bank] of Object.entries(difficultyWords)) {
+    assert.ok(bank.length >= 50, name);
+    assert.equal(new Set(bank.map((word) => word.toLowerCase())).size, bank.length, name);
+    assert.ok(bank.every((word) => word === word.trim() && word.length > 0), name);
+  }
+  assert.ok(difficultyWords.hard.includes('Chick-fil-A'));
+  assert.ok(difficultyWords.difficult.includes("s'mores"));
+});
+
+test('drawWords deals only from the requested difficulty bank', async () => {
+  const { difficultyWords } = await import('./difficulty-words.mjs');
+  const { drawWords } = await import('./word-bank.mjs');
+  const pool = [];
+  const drawn = drawWords(pool, 5, difficultyWords.difficult);
+  assert.equal(new Set(drawn).size, 5);
+  for (const word of drawn) assert.ok(difficultyWords.difficult.includes(word), word);
+});

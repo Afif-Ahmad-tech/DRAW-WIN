@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { randomInt } from 'node:crypto';
-import { drawWords, isCloseGuess } from './word-bank.mjs';
+import { drawWords, isCloseGuess, words } from './word-bank.mjs';
+import { difficultyWords } from './difficulty-words.mjs';
 const colours = ['#283026', '#e53935', '#f28c28', '#f5c518', '#43a047', '#1e88e5', '#8e44ad', '#8d6e63', '#ffffff'];
 
 export function attachMultiplayer(server) {
@@ -29,9 +30,10 @@ export function attachMultiplayer(server) {
     if (remaining <= 0) return room.state.status === 'leaderboard' ? nextTurn(room) : endTurn(room);
     if (room.state.status === 'playing' && room.state.word) {
       const count = remaining <= 5000 ? 3 : remaining <= 15000 ? 2 : remaining <= 30000 ? 1 : 0;
+      const letterIndexes = [...room.state.word].map((letter, index) => /[a-z]/i.test(letter) ? index : -1).filter((index) => index >= 0);
       let changed = false;
-      while (room.revealed.size < Math.min(count, room.state.word.length)) {
-        const available = [...room.state.word].map((_, i) => i).filter((i) => !room.revealed.has(i));
+      while (room.revealed.size < Math.min(count, letterIndexes.length)) {
+        const available = letterIndexes.filter((index) => !room.revealed.has(index));
         room.revealed.add(available[randomInt(available.length)]); changed = true;
       }
       if (changed) sync(room);
@@ -64,7 +66,7 @@ export function attachMultiplayer(server) {
       state.leaderboard = [];
       state.endsAt = Date.now() + 60000;
       state.round = next.round; state.drawer = next.id;
-      state.choices = drawWords(room.wordPool, state.settings.choices);
+      state.choices = drawWords(room.wordPool, state.settings.choices, difficultyWords[state.settings.difficulty] || words);
       state.choosing = true;
     }
     sync(room);
@@ -100,7 +102,7 @@ export function attachMultiplayer(server) {
           if (rooms.size >= 500) return send(socket, { type: 'error', text: 'Server is full. Try again later.' });
           let code;
           do { code = String(randomInt(10000)).padStart(4, '0'); } while (rooms.has(code));
-          room = { state: { code, host: id, status: 'lobby', players: [{ id, name, score: 0 }], settings: { rounds: 2, choices: 2 }, round: 0, turn: 0, word: '', choices: [], strokes: [] }, turns: [], wordPool: [], revealed: new Set(), correct: new Set(), wrongGuesses: new Map(), clients: new Map(), timers: new Map() };
+          room = { state: { code, host: id, status: 'lobby', players: [{ id, name, score: 0 }], settings: { rounds: 2, choices: 2, difficulty: 'easy' }, round: 0, turn: 0, word: '', choices: [], strokes: [] }, turns: [], wordPool: [], revealed: new Set(), correct: new Set(), wrongGuesses: new Map(), clients: new Map(), timers: new Map() };
           rooms.set(code, room);
         } else {
           room = typeof message.code === 'string' && /^[0-9]{4}$/.test(message.code) ? rooms.get(message.code) : null;
@@ -136,9 +138,13 @@ export function attachMultiplayer(server) {
       }
       if (message.type === 'settings' && id === state.host && state.status === 'lobby') {
         if (!Number.isInteger(message.rounds) || message.rounds < 2 || message.rounds > 5 || !Number.isInteger(message.choices) || message.choices < 2 || message.choices > 5) return;
-        state.settings = { rounds: message.rounds, choices: message.choices }; sync(room);
+        const difficulty = message.difficulty === undefined ? state.settings.difficulty : message.difficulty;
+        if (!Object.hasOwn(difficultyWords, difficulty)) return;
+        if (difficulty !== state.settings.difficulty) room.wordPool = [];
+        state.settings = { rounds: message.rounds, choices: message.choices, difficulty }; sync(room);
       } else if (message.type === 'start' && id === state.host && state.status === 'lobby' && state.players.length >= 2) {
         room.turns = Array.from({ length: state.settings.rounds }, (_, round) => state.players.map((p) => ({ id: p.id, round: round + 1 }))).flat();
+        room.wordPool = [];
         state.status = 'playing'; state.round = 0; state.turn = 0; nextTurn(room);
       } else if (message.type === 'choose' && id === state.drawer && state.status === 'playing' && state.choosing && state.choices.includes(message.word)) {
         state.word = message.word; state.choices = []; state.choosing = false; sync(room);

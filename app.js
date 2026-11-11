@@ -106,12 +106,13 @@ function render() {
   if (!state) return;
   $('room-title').innerHTML = `Room <span>${room}</span>`;
   $('code-display').textContent = room;
-  const settings = state.settings || { rounds: 2, choices: 2 };
+  const settings = state.settings || { rounds: 2, choices: 2, difficulty: 'easy' };
   $('host-settings').classList.toggle('hidden', me !== state.host);
   $('settings-summary').classList.toggle('hidden', me === state.host);
   $('rounds').value = settings.rounds;
   $('choices-count').value = settings.choices;
-  $('settings-summary').textContent = settings.rounds + ' rounds, ' + settings.choices + ' word choices per turn';
+  $('difficulty').value = settings.difficulty;
+  $('settings-summary').textContent = settings.rounds + ' rounds, ' + settings.choices + ' word choices, ' + settings.difficulty + ' difficulty';
   $('players').innerHTML = state.players.map((p) => `<div class="player"><span class="avatar">${escapeHtml(p.name[0].toUpperCase())}</span>${escapeHtml(p.name)}${p.id === state.host ? '<span class="host-tag">HOST</span>' : ''}</div>`).join('');
   $('start').disabled = me !== state.host || state.players.length < 2;
   $('start').textContent = me === state.host ? (state.players.length < 2 ? 'Waiting for players…' : 'Start game ↗') : 'Waiting for host…';
@@ -216,7 +217,7 @@ $('profile-form').onsubmit = (event) => {
   else if (sessionStorage.activeRoom && sessionStorage.activeRoom === $('room-code').value) connect('join');
 };
 $('start').onclick = () => send({ type: 'start' });
-for (const id of ['rounds', 'choices-count']) $(id).onchange = () => send({ type: 'settings', rounds: Number($('rounds').value), choices: Number($('choices-count').value) });
+for (const id of ['rounds', 'choices-count', 'difficulty']) $(id).onchange = () => send({ type: 'settings', rounds: Number($('rounds').value), choices: Number($('choices-count').value), difficulty: $('difficulty').value });
 for (const [name, colour] of colours) {
   const button = document.createElement('button'); button.className = 'colour-swatch'; button.style.backgroundColor = colour;
   if (colour === '#ffffff') button.style.borderColor = '#b8bcb1';

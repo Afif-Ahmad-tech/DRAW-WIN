@@ -7,6 +7,7 @@ const { once } = require('node:events');
 
 test('clients can join, reconnect, draw, guess and continue after the drawer leaves', async (t) => {
   const { attachMultiplayer } = await import('./multiplayer.mjs');
+  const { difficultyWords } = await import('./difficulty-words.mjs');
   const server = createServer();
   const wss = attachMultiplayer(server);
   server.listen(0, '127.0.0.1');
@@ -42,7 +43,7 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   a.send({ type: 'create', id: ids[0], name: 'A' });
   const created = await a.next((m) => m.type === 'joined');
   assert.match(created.state.code, /^[0-9]{4}$/);
-  assert.deepEqual(created.state.settings, { rounds: 2, choices: 2 });
+  assert.deepEqual(created.state.settings, { rounds: 2, choices: 2, difficulty: 'easy' });
   const invalid = await client();
   for (const code of ['AB12', '12345']) {
     invalid.send({ type: 'join', code, id: randomUUID(), name: 'Invalid' });
@@ -64,22 +65,26 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   await b.next((m) => m.type === 'pong');
   assert.equal(b.state().players[1].name, 'Bee');
   b.send({ type: 'settings', rounds: 3, choices: 3 });
-  a.send({ type: 'settings', rounds: 5, choices: 5 });
+  a.send({ type: 'settings', rounds: 5, choices: 5, difficulty: 'hard' });
   await b.next((m) => m.type === 'state' && m.state.settings.rounds === 5);
-  a.send({ type: 'settings', rounds: 6, choices: 1 });
+  a.send({ type: 'settings', rounds: 6, choices: 1, difficulty: 'nightmare' });
+  a.send({ type: 'ping' });
+  await a.next((m) => m.type === 'pong');
+  assert.deepEqual(a.state().settings, { rounds: 5, choices: 5, difficulty: 'hard' });
   t.mock.timers.enable({ apis: ['Date'], now: 100000 });
   a.send({ type: 'start' });
   const playing = await b.next((m) => m.type === 'state' && m.state.status === 'playing');
   assert.equal(playing.state.drawer, ids[0]);
   assert.equal(playing.state.word, '');
   assert.deepEqual(playing.state.choices, []);
-  assert.deepEqual(playing.state.settings, { rounds: 5, choices: 5 });
+  assert.deepEqual(playing.state.settings, { rounds: 5, choices: 5, difficulty: 'hard' });
   const options = (await a.next((m) => m.type === 'state' && m.state.choosing)).state.choices;
   assert.equal(options.length, 5);
   assert.equal(new Set(options).size, 5);
+  for (const word of options) assert.ok(difficultyWords.hard.includes(word), word);
   a.send({ type: 'choose', word: options[0] });
   const ready = await b.next((m) => m.type === 'state' && m.state.mask.length > 0);
-  assert.equal(ready.state.mask, '_'.repeat(options[0].length));
+  assert.equal(ready.state.mask, options[0].replace(/[a-z]/gi, '_'));
   assert.equal(ready.state.word, '');
   a.close();
   a = await client();

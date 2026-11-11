@@ -2,14 +2,14 @@
 
 <img src="https://capsule-render.vercel.app/api?type=waving&amp;color=0:20231f,100:85bd3b&amp;height=180&amp;section=header&amp;text=Draw%20Win&amp;fontSize=64&amp;fontColor=ffffff&amp;animation=fadeIn&amp;fontAlignY=36&amp;desc=draw%20it.%20guess%20it.&amp;descAlignY=56&amp;descSize=18" alt="Draw Win — draw it, guess it" />
 
-<a href="https://draw-win.onrender.com"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&amp;weight=600&amp;size=22&amp;pause=900&amp;color=85BD3B&amp;center=true&amp;vCenter=true&amp;width=720&amp;lines=Draw+it.+Guess+it.;2-10+players%2C+one+shared+canvas;3%2C000+drawable+words%2C+no+repeats;60-second+turns.+Fast+fingers+win." alt="Animated tagline: draw it, guess it — 2 to 10 players, 3,000 words, 60-second turns" /></a>
+<a href="https://draw-win.onrender.com"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&amp;weight=600&amp;size=22&amp;pause=900&amp;color=85BD3B&amp;center=true&amp;vCenter=true&amp;width=720&amp;lines=Draw+it.+Guess+it.;2-10+players%2C+one+shared+canvas;easy+to+difficult+word+banks;60-second+turns.+Fast+fingers+win." alt="Animated tagline: draw it, guess it — 2 to 10 players, easy to difficult word banks, 60-second turns" /></a>
 
 <br><br>
 
 <a href="https://draw-win.onrender.com"><img src="https://img.shields.io/badge/PLAY%20NOW-draw--win.onrender.com-b8fa6b?style=for-the-badge&amp;labelColor=20231f&amp;logo=render&amp;logoColor=white" alt="Play Draw Win now" /></a>
 <img src="https://img.shields.io/badge/PLAYERS-2--10-20231f?style=for-the-badge&amp;labelColor=b8fa6b" alt="2 to 10 players" />
 <img src="https://img.shields.io/badge/NODE-20.4%2B-3c873a?style=for-the-badge&amp;logo=nodedotjs&amp;logoColor=white" alt="Node.js 20.4 or newer" />
-<img src="https://img.shields.io/badge/WORDS-3%2C000-20231f?style=for-the-badge&amp;labelColor=b8fa6b" alt="3,000 word library" />
+<img src="https://img.shields.io/badge/BANKS-4-20231f?style=for-the-badge&amp;labelColor=b8fa6b" alt="4 difficulty word banks" />
 
 <br><br>
 
@@ -27,7 +27,7 @@
 - ⏱️ **60-second turns** — letters reveal themselves as the clock runs down (30s, 15s and 5s left).
 - 🏆 **Live scoring** — a correct guess starts at 80 points, drops 1 per second after 10s, and 1 per wrong guess, with a floor of 15.
 - 🔁 **Everyone draws** — 2–5 rounds, 2–5 word choices per turn, 2–10 players.
-- 🧠 **3,000-word library** — drawn at random with no repeat options until the pool is exhausted.
+- 🎚️ **Host-picked difficulty** — Easy, Medium, Hard or Difficult word banks, each dealt without repeats until it runs out.
 - 🔎 **"Close!" hints** — near-miss spellings get a private nudge, but only the exact word scores.
 - 🔗 **Invite by link** — share the URL or the 4-digit room code, on any device hitting the same server.
 - 🧹 **Nothing to sign up for** — rooms live in memory and vanish when the server restarts.
@@ -36,7 +36,7 @@
 <summary><strong>🎮 How to play</strong> — click to unfold</summary>
 
 1. **Create a room** — pick a name, then share the 4-digit code or the invite link.
-2. **Everyone joins** — up to 10 players. The host sets rounds (2–5) and word choices per turn (2–5).
+2. **Everyone joins** — up to 10 players. The host sets rounds (2–5), word choices per turn (2–5) and difficulty (Easy / Medium / Hard / Difficult).
 3. **Start** — the host can start once at least 2 players are in.
 4. **Draw** — the drawer picks one of the offered words and sketches it for 60 seconds.
 5. **Guess** — everyone else types guesses; correct guesses score instantly, and the turn ends early once every guesser has it.
@@ -63,11 +63,11 @@ points = max(15, 80 − max(0, seconds − 10) − wrong_guesses)
 <details>
 <summary><strong>🧠 Words & close guesses</strong> — click to unfold</summary>
 
-`words.txt` bundles 3,000 concrete, drawable English words — no external word API needed.
+Gameplay deals from four host-selected banks — **Easy**, **Medium**, **Hard** and **Difficult** — defined in `difficulty-words.mjs`. Each room keeps its own pool for the chosen bank, so a word is not offered twice until that difficulty runs out.
 
 A guess counts as *close* when it is one substitution, insertion or deletion away, or has two adjacent letters swapped. Close guesses get a private “Close! Check your spelling.” hint and still score nothing; only the exact word pays.
 
-Word sources and licensing are documented in [WORD-SOURCES.md](WORD-SOURCES.md). The bundled word list is CC BY-SA 4.0.
+Word sources and licensing for the original 3,000-word list are documented in [WORD-SOURCES.md](WORD-SOURCES.md); that data is CC BY-SA 4.0.
 
 </details>
 
@@ -91,7 +91,7 @@ Run the test suite:
 node --test
 ```
 
-Four tests cover join/reconnect/draw/guess flow, timed turns and leaderboards, the word pool, and close-guess matching.
+Six tests cover join/reconnect/draw/guess flow, timed turns and leaderboards, the word pool, difficulty banks, and close-guess matching.
 
 </details>
 
@@ -105,8 +105,9 @@ Four tests cover join/reconnect/draw/guess flow, timed turns and leaderboards, t
 | `style.css` | The hand-drawn look |
 | `server.mjs` | Tiny static file server with WebSockets attached |
 | `multiplayer.mjs` | Rooms, turns, timers, scoring |
-| `word-bank.mjs` | Word pool and close-guess check |
-| `words.txt` | 3,000 drawable words |
+| `word-bank.mjs` | Word dealing and close-guess check |
+| `difficulty-words.mjs` | The four host-selectable word banks |
+| `words.txt` | Original 3,000-word library, kept as reference |
 | `room.test.cjs`, `word-bank.test.cjs` | `node:test` suites |
 
 </details>

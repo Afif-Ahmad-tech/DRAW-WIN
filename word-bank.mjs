@@ -3,10 +3,10 @@ import { randomInt } from 'node:crypto';
 
 export const words = readFileSync(new URL('./words.txt', import.meta.url), 'utf8').trim().split(/\r?\n/);
 
-export function drawWords(pool, count) {
+export function drawWords(pool, count, source = words) {
   const chosen = [];
   while (chosen.length < count) {
-    if (!pool.length) pool.push(...words.filter((word) => !chosen.includes(word)));
+    if (!pool.length) pool.push(...source.filter((word) => !chosen.includes(word)));
     chosen.push(pool.splice(randomInt(pool.length), 1)[0]);
   }
   return chosen;
