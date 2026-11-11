@@ -39,6 +39,8 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   a.send({ type: 'create', id: ids[0], name: 'A' });
   const created = await a.next((m) => m.type === 'joined');
   assert.deepEqual(created.state.settings, { rounds: 2, choices: 2 });
+  a.send({ type: 'ping' });
+  await a.next((m) => m.type === 'pong');
   for (const [client, id, name] of [[b, ids[1], 'B'], [c, ids[2], 'C']]) {
     client.send({ type: 'join', code: created.state.code, id, name });
     await client.next((m) => m.type === 'joined');

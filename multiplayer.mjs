@@ -80,6 +80,7 @@ export function attachMultiplayer(server) {
       let message;
       try { message = JSON.parse(raw); } catch { return; }
       if (!message || typeof message !== 'object') return;
+      if (message.type === 'ping') { send(socket, { type: 'pong' }); return; }
       if (!room && (message.type === 'create' || message.type === 'join')) {
         if (typeof message.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(message.id)) return;
         id = message.id;

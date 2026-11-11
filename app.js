@@ -24,13 +24,19 @@ function connect(type, retry = false) {
   connectionStatus(retry ? 'Reconnecting…' : 'Connecting…');
   $('create').disabled = $('join').disabled = true;
   let rejected = false;
+  let lastMessage = Date.now(), heartbeat;
   const timeout = setTimeout(() => { if (channel === socket) socket.close(); }, 40000);
   socket.onopen = () => {
     if (channel !== socket) return;
     socket.send(JSON.stringify({ type, id: me, name: getName(), code }));
+    heartbeat = setInterval(() => {
+      if (Date.now() - lastMessage > 45000) { socket.close(); return; }
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ping' }));
+    }, 15000);
   };
   socket.onmessage = ({ data }) => {
     if (channel !== socket) return;
+    lastMessage = Date.now();
     const message = JSON.parse(data);
     if (message.type === 'error') {
       rejected = true; clearTimeout(timeout); sessionStorage.removeItem('activeRoom');
@@ -57,6 +63,7 @@ function connect(type, retry = false) {
     } else if (message.type === 'message') addMessage(message.name, message.text, message.correct);
   };
   socket.onclose = () => {
+    clearInterval(heartbeat);
     clearTimeout(timeout);
     if (channel !== socket) return;
     channel = null;
