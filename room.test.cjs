@@ -73,7 +73,13 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   const stroke = await b.next((m) => m.type === 'stroke');
   assert.equal(stroke.sender, ids[0]);
   assert.equal(stroke.stroke.colour, '#1e88e5');
+  b.send({ type: 'guess', text: 'definitelywrong', turn: 1 });
+  const wrong = await b.next((m) => m.type === 'guess-result');
+  assert.equal(wrong.correct, false);
+  assert.equal(wrong.guess, 'definitelywrong');
+  assert.equal(wrong.turn, 1);
   b.send({ type: 'guess', text: options[0] });
+  assert.equal((await b.next((m) => m.type === 'guess-result')).correct, true);
   assert.equal((await c.next((m) => m.type === 'state' && m.state.guessed)).state.players[1].score, 1);
   a.send({ type: 'leave' });
   const next = await b.next((m) => m.type === 'state' && m.state.drawer === ids[1]);

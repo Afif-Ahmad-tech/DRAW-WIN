@@ -68,6 +68,10 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:pan-
 #connection-status{font:11px var(--mono);color:var(--muted);text-align:center}
 .turn-meta{display:flex;align-items:center;gap:12px}
 #turn-timer{font:600 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.guess-feedback{min-height:18px;flex:none;font-size:12px;margin-bottom:4px}
+.guess-feedback.correct{color:#477a18}
+.guess-feedback.incorrect{color:#b52d28}
+#word.guess-wrong{color:#d32f2f;text-shadow:0 0 8px #d32f2f55}
 .setting-field select{font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:7px;background:var(--paper);color:var(--ink)}
 #host-settings{width:100%}
 #host-settings h2{margin:0}

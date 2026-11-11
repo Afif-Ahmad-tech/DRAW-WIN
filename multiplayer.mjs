@@ -130,8 +130,10 @@ export function attachMultiplayer(server) {
         state.strokes.push(clean);
         broadcast(room, { type: 'stroke', stroke: clean, sender: id });
       } else if (message.type === 'guess' && id !== state.drawer && state.status === 'playing' && !state.choosing && !state.guessed && typeof message.text === 'string') {
+        if (message.turn !== undefined && message.turn !== state.turn) return;
         const text = message.text.trim().slice(0, 80), player = state.players.find((p) => p.id === id);
         if (!text || !player) return;
+        send(socket, { type: 'guess-result', turn: state.turn, correct: text.toLowerCase() === state.word.toLowerCase(), guess: text });
         if (text.toLowerCase() === state.word.toLowerCase()) {
           state.guessed = true; player.score++;
           state.endsAt = Date.now() + 3000;
