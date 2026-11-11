@@ -6,7 +6,7 @@ const colours = ['#283026', '#e53935', '#f28c28', '#f5c518', '#43a047', '#1e88e5
 
 export function drawerPoints(correct, guessers) {
   if (!correct || guessers <= 0) return 0;
-  if (correct === guessers) return 80;
+  if (correct === guessers) return 60;
   return correct * 10 >= guessers * 3 ? 40 : 0;
 }
 

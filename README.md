@@ -25,7 +25,7 @@
 
 - 🎨 **One shared canvas** — every stroke streams to all players over WebSockets.
 - ⏱️ **60-second turns** — letters reveal themselves as the clock runs down (30s, 15s and 5s left).
-- 🏆 **Live scoring** — a correct guess starts at 80 points, drops 1 per second after 10s, and 1 per wrong guess, with a floor of 15. Drawers also score: 40 when at least 30% of the other players guess correctly, 80 when everyone does, 0 otherwise.
+- 🏆 **Live scoring** — a correct guess starts at 80 points, drops 1 per second after 10s, and 1 per wrong guess, with a floor of 15. Drawers also score: 40 when at least 30% of the other players guess correctly, 60 max when everyone does, 0 otherwise.
 - 🔁 **Everyone draws** — 2–5 rounds, 2–5 word choices per turn, 2–10 players.
 - 🎚️ **Host-picked difficulty** — Easy, Medium, Hard or Difficult word banks, each dealt without repeats until it runs out.
 - 🔎 **"Close!" hints** — near-miss spellings get a private nudge, but only the exact word scores.
@@ -61,7 +61,7 @@ points = max(15, 80 − max(0, seconds − 10) − wrong_guesses)
 Drawers are scored separately at the end of the turn:
 
 ```text
-guessed correctly: 0 → 0 points, >= 30% → 40 points, all → 80 points
+guessed correctly: 0 → 0 points, >= 30% → 40 points, all → 60 points
 ```
 
 The 30% check counts every player except the drawer: with 9 guessers, 3 or more (33%) earns the 40-point bonus, while 2 (22%) does not. 80 is reserved for the case where every guesser gets it.

@@ -135,10 +135,10 @@ test('clients can join, reconnect, draw, guess and continue after the drawer lea
   const lateCorrect = await b.next((m) => m.type === 'guess-result' && m.correct);
   assert.equal(lateCorrect.points, 15);
   const results = await c.next((m) => m.type === 'state' && m.state.status === 'leaderboard');
-  assert.equal(results.state.players[0].score, 80, 'drawer earns 80 when everyone guesses');
+  assert.equal(results.state.players[0].score, 60, 'drawer earns 60 when everyone guesses');
   assert.equal(results.state.players[1].score, 15);
   assert.equal(results.state.players[2].score, 80);
-  assert.deepEqual(results.state.leaderboard.map((p) => p.gained).sort((x, y) => x - y), [15, 80, 80]);
+  assert.deepEqual(results.state.leaderboard.map((p) => p.gained).sort((x, y) => x - y), [15, 60, 80]);
   assert.equal(results.state.endsAt, Date.now() + 5000);
   b.send({ type: 'rename', name: 'Winner' });
   const updatedResults = await c.next((m) => m.type === 'state' && m.state.leaderboard?.find((p) => p.id === ids[1])?.name === 'Winner');
@@ -217,7 +217,7 @@ test('timed turns show a five-second leaderboard before automatic handoff and fi
   assert.equal((await host.next((m) => m.type === 'guess-result' && m.correct)).points, 78);
   const correctResults = await reconnect.next((m) => m.type === 'state' && m.state.turn === 2 && m.state.status === 'leaderboard');
   assert.equal(correctResults.state.endsAt, Date.now() + 5000);
-  assert.equal(correctResults.state.leaderboard[0].gained, 80);
+  assert.equal(correctResults.state.leaderboard.find((p) => p.id === guestId).gained, 60, 'drawer earns 60 when everyone guesses');
   t.mock.timers.tick(5000);
   const third = await host.next((m) => m.type === 'state' && m.state.turn === 3);
   host.send({ type: 'choose', word: third.state.choices[0] });
@@ -233,21 +233,21 @@ test('timed turns show a five-second leaderboard before automatic handoff and fi
   host.send({ type: 'guess', text: fourth.state.choices[0] });
   assert.equal((await host.next((m) => m.type === 'guess-result' && m.correct)).points, 80);
   const finalTurn = await host.next((m) => m.type === 'state' && m.state.turn === 4 && m.state.status === 'leaderboard');
-  assert.equal(finalTurn.state.leaderboard[0].score, 240);
-  assert.equal(finalTurn.state.leaderboard[1].score, 238);
+  assert.equal(finalTurn.state.leaderboard[0].score, 218);
+  assert.equal(finalTurn.state.leaderboard[1].score, 200);
   t.mock.timers.tick(5000);
   const finished = await host.next((m) => m.type === 'state' && m.state.status === 'finished');
-  assert.equal(finished.state.leaderboard[0].id, guestId);
+  assert.equal(finished.state.leaderboard[0].id, hostId);
 });
 
-test('drawer points: 0 with no correct guesses, 40 at 30%, 80 when everyone guesses', async () => {
+test('drawer points: 0 with no correct guesses, 40 at 30%, 60 max when everyone guesses', async () => {
   const { drawerPoints } = await import('./multiplayer.mjs');
   assert.equal(drawerPoints(0, 9), 0);
   assert.equal(drawerPoints(2, 9), 0, '22% is below the threshold');
   assert.equal(drawerPoints(3, 10), 40, 'exactly 30% qualifies');
   assert.equal(drawerPoints(3, 9), 40);
   assert.equal(drawerPoints(4, 5), 40);
-  assert.equal(drawerPoints(5, 5), 80);
-  assert.equal(drawerPoints(1, 1), 80);
+  assert.equal(drawerPoints(5, 5), 60);
+  assert.equal(drawerPoints(1, 1), 60);
   assert.equal(drawerPoints(0, 0), 0);
 });
