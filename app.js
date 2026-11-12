@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const me = sessionStorage.playerId || (sessionStorage.playerId = crypto.randomUUID());
-let room, channel, drawing = false, lastPoint, state;
+let room, channel, drawing = false, lastPoint, state, strokes = [];
 let selectedColour = '#283026';
 let retryTimer, retries = 0;
 let rejectedGuess = '', guessFlashTimer;
@@ -42,13 +42,14 @@ function connect(type, retry = false) {
     const message = JSON.parse(data);
     if (message.type === 'error') {
       rejected = true; clearTimeout(timeout); sessionStorage.removeItem('activeRoom');
-      state = null; room = null; drawing = false;
+      state = null; room = null; drawing = false; strokes = [];
       $('room').classList.add('hidden'); $('home').classList.remove('hidden');
       showError(message.text); socket.close(); return;
     }
     if (message.type === 'joined') {
       if (state?.turn !== message.state.turn) resetGuess();
       state = message.state; room = state.code;
+      strokes = state.strokes || [];
       clearTimeout(timeout); retries = 0; connectionStatus('Connected');
       $('create').disabled = $('join').disabled = false;
       sessionStorage.activeRoom = room;
@@ -59,10 +60,12 @@ function connect(type, retry = false) {
       const oldRound = state?.turn, oldStatus = state?.status;
       state = message.state;
       if (oldRound !== state.turn || oldStatus !== state.status) { drawing = false; resetGuess(); }
-      if (oldRound !== state.turn) $('flying-guesses').replaceChildren();
+      if (oldRound !== state.turn) { strokes = []; clearBoard(); $('flying-guesses').replaceChildren(); }
       render();
     } else if (message.type === 'stroke' && state && message.sender !== me) {
-      state.strokes.push(message.stroke); drawStroke(message.stroke, false);
+      strokes.push(message.stroke); drawStroke(message.stroke, false);
+    } else if (message.type === 'clear') {
+      strokes = []; clearBoard();
     } else if (message.type === 'message') showGuess(message.name, message.text, message.correct);
     else if (message.type === 'guess-result' && message.turn === state?.turn) {
       const nextInput = $('guess').value;
@@ -99,7 +102,7 @@ function leaveRoom() {
   send({ type: 'leave' });
   const socket = channel; channel = null; if (socket) socket.close();
   connectionStatus(''); $('create').disabled = $('join').disabled = false;
-  $('room').classList.add('hidden'); $('home').classList.remove('hidden'); state=null; room=null;
+  $('room').classList.add('hidden'); $('home').classList.remove('hidden'); state=null; room=null; strokes=[];
   history.replaceState(null, '', location.pathname);
 }
 function render() {
@@ -151,7 +154,7 @@ function render() {
   $('drawing-tools').classList.toggle('hidden', !drawingTurn);
   $('guess-dock').classList.toggle('hidden', drawingTurn);
   $('clear').disabled = !drawingTurn || state.choosing || state.guessed;
-  $('board-hint').textContent = drawingTurn && !state.strokes.length ? 'Draw a clue for everyone' : '';
+  $('board-hint').textContent = drawingTurn && !strokes.length ? 'Draw a clue for everyone' : '';
   $('board').style.pointerEvents = drawingTurn && !state.choosing && !state.guessed ? 'auto' : 'none';
   $('guess').disabled = drawingTurn || state.choosing || state.guessed;
   $('guess').maxLength = state.mask?.length || 80;
@@ -172,18 +175,20 @@ function previewGuess() {
   $('guess-slots').textContent = rejectedGuess || [...mask].map((letter, index) => typed[index] || letter.toUpperCase()).join('');
 }
 setInterval(() => {
-  $('turn-timer').textContent = state?.status === 'playing' && state.endsAt ? Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)) + 's' : '';
-  $('results-countdown').textContent = state?.status === 'leaderboard' ? 'Continuing in ' + Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)) + ' seconds…' : '';
+  const playing = state?.status === 'playing' && state.endsAt, leaderboard = state?.status === 'leaderboard' && state.endsAt;
+  const left = playing ? Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)) : 0;
+  $('turn-timer').textContent = playing ? left + 's' : '';
+  $('results-countdown').textContent = leaderboard ? 'Continuing in ' + Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)) + ' seconds…' : '';
 }, 250);
 function escapeHtml(value) { return value.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function point(event) { const r=$('board').getBoundingClientRect(); return { x:(event.clientX-r.left)/r.width, y:(event.clientY-r.top)/r.height }; }
 function drawStroke(stroke, send=true) {
   if (send && channel?.readyState !== WebSocket.OPEN) return;
-  const ctx=$('board').getContext('2d'), w=$('board').clientWidth, h=$('board').clientHeight;
+  const board=$('board'), ctx=board.getContext('2d'), w=board.clientWidth, h=board.clientHeight;
   ctx.strokeStyle=stroke.colour || '#283026'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.beginPath(); ctx.moveTo(stroke.a.x*w,stroke.a.y*h); ctx.lineTo(stroke.b.x*w,stroke.b.y*h); ctx.stroke();
-  if (send) { state.strokes.push(stroke); $('board-hint').textContent = ''; channel.send(JSON.stringify({type:'stroke',stroke})); }
+  if (send) { strokes.push(stroke); $('board-hint').textContent = ''; channel.send(JSON.stringify({type:'stroke',stroke})); }
 }
-function redraw() { clearBoard(); for (const stroke of (state?.strokes || [])) drawStroke(stroke,false); }
+function redraw() { clearBoard(); for (const stroke of strokes) drawStroke(stroke,false); }
 function clearBoard() { const c=$('board'); c.getContext('2d').clearRect(0,0,c.width,c.height); }
 function showGuess(name, text, correct=false) {
   const chip = document.createElement('div'); chip.className = 'flying-guess' + (correct ? ' correct' : '');

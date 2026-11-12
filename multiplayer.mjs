@@ -20,13 +20,18 @@ export function attachMultiplayer(server) {
   const broadcast = (room, message) => {
     for (const socket of room.clients.values()) send(socket, message);
   };
-  const view = (room, id) => ({
-    ...room.state,
-    guessed: room.correct.has(id),
-    word: id === room.state.drawer || room.correct.has(id) || room.state.status === 'leaderboard' ? room.state.word : '',
-    mask: [...(room.state.word || '')].map((letter, index) => room.revealed.has(index) ? letter : /[a-z]/i.test(letter) ? '_' : letter).join(''),
-    choices: id === room.state.drawer ? room.state.choices : []
-  });
+  // Strokes are excluded: they stream as their own messages and are resent only on join,
+  // otherwise every state sync would resend the whole canvas (up to 10k strokes) per player.
+  const view = (room, id) => {
+    const { strokes, ...state } = room.state;
+    return {
+      ...state,
+      guessed: room.correct.has(id),
+      word: id === room.state.drawer || room.correct.has(id) || room.state.status === 'leaderboard' ? room.state.word : '',
+      mask: [...(room.state.word || '')].map((letter, index) => room.revealed.has(index) ? letter : /[a-z]/i.test(letter) ? '_' : letter).join(''),
+      choices: id === room.state.drawer ? room.state.choices : []
+    };
+  };
   const sync = (room) => {
     for (const [id, socket] of room.clients) send(socket, { type: 'state', state: view(room, id) });
   };
@@ -127,7 +132,7 @@ export function attachMultiplayer(server) {
         const previous = room.clients.get(id);
         room.clients.set(id, socket);
         if (previous && previous !== socket) previous.close();
-        send(socket, { type: 'joined', state: view(room, id) });
+        send(socket, { type: 'joined', state: { ...view(room, id), strokes: room.state.strokes } });
         sync(room);
         return;
       }
@@ -159,7 +164,7 @@ export function attachMultiplayer(server) {
       } else if (message.type === 'choose' && id === state.drawer && state.status === 'playing' && state.choosing && state.choices.includes(message.word)) {
         state.word = message.word; state.choices = []; state.choosing = false; sync(room);
       }
-      else if (message.type === 'clear' && id === state.drawer && state.status === 'playing') { state.strokes = []; sync(room); }
+      else if (message.type === 'clear' && id === state.drawer && state.status === 'playing') { state.strokes = []; broadcast(room, { type: 'clear' }); sync(room); }
       else if (message.type === 'stroke' && id === state.drawer && state.status === 'playing' && !state.choosing && state.strokes.length < 10000) {
         const stroke = message.stroke;
         if (!stroke || ![stroke.a?.x, stroke.a?.y, stroke.b?.x, stroke.b?.y].every((n) => typeof n === 'number' && Number.isFinite(n) && n >= -1 && n <= 2)) return;
